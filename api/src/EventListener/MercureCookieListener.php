@@ -52,7 +52,6 @@ final readonly class MercureCookieListener
             $grants = [
                 $topic,
                 \sprintf('%s/api/stock_items/{id}', $baseUrl),
-                \sprintf('%s/api/stock_orders/{id}', $baseUrl),
             ];
         } elseif (null !== $user->getAccount()?->getId()) {
             $topic = \sprintf('%s/api/accounts/%d/orders/{id}', $baseUrl, $user->getAccount()->getId());

@@ -32,3 +32,4 @@ final readonly class StockItemStateProcessor implements ProcessorInterface
         return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
     }
 }
+

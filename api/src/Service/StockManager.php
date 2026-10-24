@@ -3,16 +3,21 @@
 namespace App\Service;
 
 use App\Entity\Order;
+use App\Entity\OrderItem;
 use App\Entity\StockItem;
-use App\Entity\StockOrder;
+use App\Repository\OrderRepository;
 use App\Repository\StockItemRepository;
-use App\Repository\StockOrderRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Gère la consommation automatique de stock lors du passage d'une commande en fabrication
- * ("processing"), le déclenchement automatique d'une commande de réapprovisionnement
- * (StockOrder) sous le seuil d'alerte, et l'incrémentation du stock à réception.
+ * Gère le stock de l'atelier (où VisuAlpes est son propre fabricant/fournisseur) :
+ * 1. Lorsqu'une commande client passe en fabrication ("processing"), déduit 1 patin TPU +
+ *    1 socle ciment + 1 plaque bois par support commandé.
+ * 2. Dès qu'un composant passe sous son seuil d'alerte (quantity <= alertThreshold), génère
+ *    automatiquement une fiche de commande interne (Order avec isStockOrder=true) directement
+ *    dans le Kanban de production (sans doublon tant qu'une fiche stock est déjà ouverte).
+ * 3. Lorsqu'une fiche de commande de stock passe à "completed" ("Terminé"), ré-incrémente
+ *    automatiquement le stock du composant fabriqué.
  */
 final readonly class StockManager
 {
@@ -20,14 +25,25 @@ final readonly class StockManager
 
     public function __construct(
         private StockItemRepository $stockItemRepository,
-        private StockOrderRepository $stockOrderRepository,
+        private OrderRepository $orderRepository,
         private EntityManagerInterface $entityManager,
     ) {
     }
 
-    public function consumeForOrderIfNeeded(Order $order): void
+    public function handleOrderTransition(Order $order): void
     {
-        if ('processing' !== $order->getStatus() || $order->isStockDeducted()) {
+        if ($order->getIsStockOrder()) {
+            $this->creditStockWhenCompleted($order);
+
+            return;
+        }
+
+        $this->consumeForClientOrderIfNeeded($order);
+    }
+
+    private function consumeForClientOrderIfNeeded(Order $order): void
+    {
+        if ('processing' !== $order->getStatus() || $order->getStockDeducted()) {
             return;
         }
 
@@ -52,48 +68,61 @@ final readonly class StockManager
         $order->setStockDeducted(true);
     }
 
-    public function ensureReplenishmentIfBelowThreshold(StockItem $stockItem): ?StockOrder
+    private function creditStockWhenCompleted(Order $order): void
+    {
+        if ('completed' !== $order->getStatus() || $order->getStockCredited()) {
+            return;
+        }
+
+        $stockItem = $order->getTargetStockItem();
+        if (null === $stockItem) {
+            return;
+        }
+
+        $producedUnits = 0;
+        foreach ($order->getOrderItems() as $orderItem) {
+            $producedUnits += max(0, (int) $orderItem->getQuantity());
+        }
+        if (0 === $producedUnits) {
+            $producedUnits = $stockItem->getReorderQuantity();
+        }
+
+        $stockItem->setQuantity($stockItem->getQuantity() + $producedUnits);
+        $order->setStockCredited(true);
+    }
+
+    public function ensureReplenishmentIfBelowThreshold(StockItem $stockItem): ?Order
     {
         if ($stockItem->getQuantity() > $stockItem->getAlertThreshold()) {
             return null;
         }
 
-        foreach ($stockItem->getStockOrders() as $existing) {
-            if (\in_array($existing->getStatus(), [StockOrder::STATUS_PENDING, StockOrder::STATUS_ORDERED], true)) {
+        foreach ($stockItem->getStockReplenishmentOrders() as $existing) {
+            if ('completed' !== $existing->getStatus()) {
                 return null;
             }
         }
 
-        if ($this->stockOrderRepository->hasOpenOrderForItem($stockItem)) {
+        if ($this->orderRepository->hasOpenStockOrderForItem($stockItem)) {
             return null;
         }
 
         $deficit = max(0, $stockItem->getAlertThreshold() - $stockItem->getQuantity());
-        $qtyToOrder = max($stockItem->getReorderQuantity(), $deficit + $stockItem->getReorderQuantity());
+        $qtyToProduce = max($stockItem->getReorderQuantity(), $deficit + $stockItem->getReorderQuantity());
 
-        $stockOrder = (new StockOrder())
-            ->setStockItem($stockItem)
-            ->setQuantity($qtyToOrder)
-            ->setStatus(StockOrder::STATUS_PENDING)
-            ->setIsAuto(true);
+        $itemLine = (new OrderItem())
+            ->setProductName(\sprintf('Production stock : %s', $stockItem->getName()))
+            ->setQuantity($qtyToProduce);
 
-        $stockItem->getStockOrders()->add($stockOrder);
+        $stockOrder = (new Order())
+            ->setStatus('pending')
+            ->setIsStockOrder(true)
+            ->setTargetStockItem($stockItem)
+            ->addOrderItem($itemLine);
+
+        $stockItem->getStockReplenishmentOrders()->add($stockOrder);
         $this->entityManager->persist($stockOrder);
 
         return $stockOrder;
-    }
-
-    public function applyStockOrderReceiptIfNeeded(StockOrder $stockOrder): void
-    {
-        if (StockOrder::STATUS_RECEIVED !== $stockOrder->getStatus() || null !== $stockOrder->getReceivedAt()) {
-            return;
-        }
-
-        $stockItem = $stockOrder->getStockItem();
-        if (null !== $stockItem) {
-            $stockItem->setQuantity($stockItem->getQuantity() + $stockOrder->getQuantity());
-        }
-
-        $stockOrder->setReceivedAt(new \DateTimeImmutable());
     }
 }

@@ -34,7 +34,7 @@ use Symfony\Component\Validator\Constraints as Assert;
         'private' => true,
         'topics' => [
             '@=iri(object)',
-            '@=iri(object.getAccount()) ~ "/orders/" ~ object.getId()',
+            '@=object.getAccount() ? iri(object.getAccount()) ~ "/orders/" ~ object.getId() : iri(object)',
         ],
     ],
 )]
@@ -63,8 +63,21 @@ class Order
     #[Groups(['order:read'])]
     private bool $stockDeducted = false;
 
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['order:read', 'order:write'])]
+    private bool $isStockOrder = false;
+
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['order:read'])]
+    private bool $stockCredited = false;
+
+    #[ORM\ManyToOne(inversedBy: 'stockReplenishmentOrders')]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['order:read', 'order:write'])]
+    private ?StockItem $targetStockItem = null;
+
     #[ORM\ManyToOne(inversedBy: 'orders')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: true)]
     #[Groups(['order:read', 'order:write'])]
     private ?Account $account = null;
 
@@ -110,7 +123,7 @@ class Order
         return $this;
     }
 
-    public function isStockDeducted(): bool
+    public function getStockDeducted(): bool
     {
         return $this->stockDeducted;
     }
@@ -118,6 +131,42 @@ class Order
     public function setStockDeducted(bool $stockDeducted): static
     {
         $this->stockDeducted = $stockDeducted;
+
+        return $this;
+    }
+
+    public function getIsStockOrder(): bool
+    {
+        return $this->isStockOrder;
+    }
+
+    public function setIsStockOrder(bool $isStockOrder): static
+    {
+        $this->isStockOrder = $isStockOrder;
+
+        return $this;
+    }
+
+    public function getStockCredited(): bool
+    {
+        return $this->stockCredited;
+    }
+
+    public function setStockCredited(bool $stockCredited): static
+    {
+        $this->stockCredited = $stockCredited;
+
+        return $this;
+    }
+
+    public function getTargetStockItem(): ?StockItem
+    {
+        return $this->targetStockItem;
+    }
+
+    public function setTargetStockItem(?StockItem $targetStockItem): static
+    {
+        $this->targetStockItem = $targetStockItem;
 
         return $this;
     }
@@ -155,7 +204,6 @@ class Order
     public function removeOrderItem(OrderItem $orderItem): static
     {
         if ($this->orderItems->removeElement($orderItem)) {
-            // set the owning side to null (unless already changed)
             if ($orderItem->getParentOrder() === $this) {
                 $orderItem->setParentOrder(null);
             }

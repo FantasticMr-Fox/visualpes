@@ -27,37 +27,32 @@ interface OrderItem {
   quantity: number;
 }
 
+interface StockItemSummary {
+  "@id": string;
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+}
+
+interface StockItem extends StockItemSummary {
+  quantity: number;
+  alertThreshold: number;
+  reorderQuantity: number;
+  updatedAt: string;
+}
+
 interface Order {
   "@id": string;
   id: number;
   status: "pending" | "processing" | "quality_check" | "completed";
   createdAt: string;
   stockDeducted?: boolean;
-  account?: AccountSummary | string;
+  isStockOrder?: boolean;
+  stockCredited?: boolean;
+  targetStockItem?: StockItemSummary | null;
+  account?: AccountSummary | string | null;
   orderItems?: OrderItem[];
-}
-
-interface StockItem {
-  "@id": string;
-  id: number;
-  code: string;
-  name: string;
-  quantity: number;
-  alertThreshold: number;
-  reorderQuantity: number;
-  unit: string;
-  updatedAt: string;
-}
-
-interface StockOrder {
-  "@id": string;
-  id: number;
-  stockItem: StockItem;
-  quantity: number;
-  status: "pending" | "ordered" | "received" | "cancelled";
-  isAuto: boolean;
-  createdAt: string;
-  receivedAt?: string | null;
 }
 
 const COLUMNS = [
@@ -66,13 +61,6 @@ const COLUMNS = [
   { id: "quality_check", title: "Contrôle & Encodage", color: "border-purple-500/40 bg-purple-500/5 text-purple-400" },
   { id: "completed", title: "Terminé", color: "border-emerald-500/40 bg-emerald-500/5 text-emerald-400" },
 ] as const;
-
-const STOCK_ORDER_STATUS: Record<StockOrder["status"], { label: string; badge: string }> = {
-  pending: { label: "À commander", badge: "border-amber-500/40 bg-amber-500/10 text-amber-300" },
-  ordered: { label: "Commandé fournisseur", badge: "border-sky-500/40 bg-sky-500/10 text-sky-300" },
-  received: { label: "Réceptionné", badge: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" },
-  cancelled: { label: "Annulé", badge: "border-neutral-700 bg-neutral-800 text-neutral-400" },
-};
 
 // Jeton lu depuis localStorage. `undefined` = rendu serveur / hydratation (encore inconnu).
 const subscribeToken = (onChange: () => void) => {
@@ -94,7 +82,6 @@ export default function KanbanPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
-  const [stockOrders, setStockOrders] = useState<StockOrder[]>([]);
   const [connected, setConnected] = useState<boolean>(false);
   const [mercureTopic, setMercureTopic] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -103,6 +90,8 @@ export default function KanbanPage() {
   // Modale création / édition de fiche commande
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [formIsStockOrder, setFormIsStockOrder] = useState<boolean>(false);
+  const [formTargetStockIri, setFormTargetStockIri] = useState<string>("");
   const [formAccountIri, setFormAccountIri] = useState<string>("");
   const [formStatus, setFormStatus] = useState<Order["status"]>("pending");
   const [formItems, setFormItems] = useState<OrderItem[]>([
@@ -110,7 +99,7 @@ export default function KanbanPage() {
   ]);
   const [savingOrder, setSavingOrder] = useState<boolean>(false);
 
-  // Modale / édition seuil & stock d'un composant
+  // Modale édition seuil & stock d'un composant
   const [editingStock, setEditingStock] = useState<StockItem | null>(null);
   const [stockFormQty, setStockFormQty] = useState<number>(0);
   const [stockFormThreshold, setStockFormThreshold] = useState<number>(10);
@@ -139,53 +128,43 @@ export default function KanbanPage() {
     if (token === null) router.replace("/login");
   }, [token, router]);
 
-  const loadStockAndAccounts = useCallback(async () => {
-    if (!authReady || !isAdmin) return;
+  const refreshAllData = useCallback(async () => {
+    if (!authReady) return;
     try {
-      const [accRes, siRes, soRes] = await Promise.all([
-        apiFetch(`${API_URL}/accounts`),
-        apiFetch(`${API_URL}/stock_items`),
-        apiFetch(`${API_URL}/stock_orders`),
-      ]);
-      const [accData, siData, soData] = await Promise.all([
-        accRes.json(),
-        siRes.json(),
-        soRes.json(),
-      ]);
-      setAccounts(extractMembers<AccountSummary>(accData));
-      setStockItems(extractMembers<StockItem>(siData));
-      setStockOrders(extractMembers<StockOrder>(soData));
+      const ordRes = await apiFetch(`${API_URL}/orders`);
+      const topic = ordRes.headers.get("X-Mercure-Topic") ?? `${API_ORIGIN}/api/orders/{id}`;
+      const ordData = await ordRes.json();
+      setOrders(extractMembers<Order>(ordData));
+      setMercureTopic((prev) => prev ?? topic);
+
+      if (isAdmin) {
+        const [accRes, siRes] = await Promise.all([
+          apiFetch(`${API_URL}/accounts`),
+          apiFetch(`${API_URL}/stock_items`),
+        ]);
+        const [accData, siData] = await Promise.all([accRes.json(), siRes.json()]);
+        setAccounts(extractMembers<AccountSummary>(accData));
+        setStockItems(extractMembers<StockItem>(siData));
+      }
     } catch (err) {
       if (err instanceof UnauthorizedError) return handleUnauthorized();
-      console.error("Erreur chargement stock/comptes :", err);
+      console.error("Erreur chargement ERP :", err);
     }
   }, [authReady, isAdmin, handleUnauthorized]);
 
   // 1. Récupération initiale des commandes (+ pose du cookie Mercure) et du stock
   useEffect(() => {
     if (!authReady) return;
-    apiFetch(`${API_URL}/orders`)
-      .then(async (res) => {
-        const topic = res.headers.get("X-Mercure-Topic") ?? `${API_ORIGIN}/api/orders/{id}`;
-        const data = await res.json();
-        setOrders(extractMembers<Order>(data));
-        setMercureTopic(topic);
-        await loadStockAndAccounts();
-      })
-      .catch((err) => {
-        if (err instanceof UnauthorizedError) return handleUnauthorized();
-        console.error("Erreur API:", err);
-      });
-  }, [authReady, handleUnauthorized, loadStockAndAccounts]);
+    void Promise.resolve().then(() => refreshAllData());
+  }, [authReady, refreshAllData]);
 
-  // 2. Abonnement temps réel Mercure SSE (commandes + stock)
+  // 2. Abonnement temps réel Mercure SSE (commandes clients + fiches stock + stock_items)
   useEffect(() => {
     if (!mercureTopic) return;
     const hubUrl = new URL(MERCURE_URL);
     hubUrl.searchParams.append("topic", mercureTopic);
     if (isAdmin) {
       hubUrl.searchParams.append("topic", `${API_ORIGIN}/api/stock_items/{id}`);
-      hubUrl.searchParams.append("topic", `${API_ORIGIN}/api/stock_orders/{id}`);
     }
 
     const eventSource = new EventSource(hubUrl.toString(), { withCredentials: true });
@@ -199,7 +178,6 @@ export default function KanbanPage() {
         const iri: string = payload?.["@id"] ?? "";
 
         if (iri.startsWith("/api/orders/")) {
-          // Suppression Mercure (objet réduit à {"@id": "/api/orders/X"})
           if (!payload.status) {
             setOrders((prev) => prev.filter((o) => o["@id"] !== iri));
             return;
@@ -227,21 +205,6 @@ export default function KanbanPage() {
               return [...prev, updatedItem];
             });
           }
-        } else if (iri.startsWith("/api/stock_orders/")) {
-          if (!payload.status) {
-            setStockOrders((prev) => prev.filter((so) => so["@id"] !== iri));
-            return;
-          }
-          const updatedSo = payload as StockOrder;
-          setStockOrders((prev) => {
-            const idx = prev.findIndex((so) => so["@id"] === iri);
-            if (idx > -1) {
-              const next = [...prev];
-              next[idx] = updatedSo;
-              return next;
-            }
-            return [updatedSo, ...prev];
-          });
         }
       } catch (err) {
         console.error("Format de message SSE invalide :", err);
@@ -253,7 +216,7 @@ export default function KanbanPage() {
     };
   }, [mercureTopic, isAdmin]);
 
-  // 3. Mutation de statut d'une commande
+  // 3. Mutation de statut d'une commande (client ou stock)
   const updateStatus = async (orderIri: string, newStatus: Order["status"]) => {
     try {
       setError(null);
@@ -267,11 +230,9 @@ export default function KanbanPage() {
         return;
       }
       if (res.ok) {
-        const updated: Order = await res.json();
-        setOrders((prev) => prev.map((o) => (o["@id"] === updated["@id"] ? updated : o)));
-        if (newStatus === "processing") {
-          loadStockAndAccounts();
-        }
+        // Rafraîchit les commandes et les stocks (ex: passage en fabrication qui génère une fiche stock,
+        // ou passage d'une fiche stock en "Terminé" qui crédite le stock)
+        await refreshAllData();
       }
     } catch (err) {
       if (err instanceof UnauthorizedError) return handleUnauthorized();
@@ -299,6 +260,8 @@ export default function KanbanPage() {
   // Ouverture modale création / édition de fiche
   const openCreateModal = () => {
     setEditingOrder(null);
+    setFormIsStockOrder(false);
+    setFormTargetStockIri(stockItems[0]?.["@id"] ?? "");
     setFormAccountIri(accounts[0]?.["@id"] ?? "/api/accounts/1");
     setFormStatus("pending");
     setFormItems([{ productName: "Support Comptoir NFC Bois", quantity: 1 }]);
@@ -307,6 +270,8 @@ export default function KanbanPage() {
 
   const openEditModal = (order: Order) => {
     setEditingOrder(order);
+    setFormIsStockOrder(Boolean(order.isStockOrder));
+    setFormTargetStockIri(order.targetStockItem?.["@id"] ?? stockItems[0]?.["@id"] ?? "");
     const accIri =
       typeof order.account === "object" && order.account !== null
         ? order.account["@id"]
@@ -338,8 +303,10 @@ export default function KanbanPage() {
         }))
         .filter((it) => it.productName.length > 0);
 
-      const payload = {
-        account: formAccountIri,
+      const payload: Record<string, unknown> = {
+        isStockOrder: formIsStockOrder,
+        targetStockItem: formIsStockOrder ? formTargetStockIri || null : null,
+        account: formIsStockOrder ? null : formAccountIri,
         status: formStatus,
         orderItems: cleanItems,
       };
@@ -361,20 +328,8 @@ export default function KanbanPage() {
         return;
       }
 
-      const saved: Order = await res.json();
-      setOrders((prev) => {
-        const idx = prev.findIndex((o) => o["@id"] === saved["@id"]);
-        if (idx > -1) {
-          const next = [...prev];
-          next[idx] = saved;
-          return next;
-        }
-        return [saved, ...prev];
-      });
       setModalOpen(false);
-      if (saved.status === "processing") {
-        loadStockAndAccounts();
-      }
+      await refreshAllData();
     } catch (err) {
       if (err instanceof UnauthorizedError) return handleUnauthorized();
       setError("Erreur lors de la sauvegarde de la fiche.");
@@ -392,7 +347,7 @@ export default function KanbanPage() {
         body: JSON.stringify({ quantity: item.quantity + delta }),
       });
       if (res.ok) {
-        await loadStockAndAccounts();
+        await refreshAllData();
       }
     } catch (err) {
       if (err instanceof UnauthorizedError) return handleUnauthorized();
@@ -422,38 +377,11 @@ export default function KanbanPage() {
       });
       if (res.ok) {
         setEditingStock(null);
-        await loadStockAndAccounts();
+        await refreshAllData();
       }
     } catch (err) {
       if (err instanceof UnauthorizedError) return handleUnauthorized();
       console.error("Erreur mise à jour paramètre stock :", err);
-    }
-  };
-
-  const updateStockOrderStatus = async (so: StockOrder, status: StockOrder["status"]) => {
-    try {
-      const res = await apiFetch(so["@id"], {
-        method: "PATCH",
-        headers: { "Content-Type": "application/merge-patch+json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        await loadStockAndAccounts();
-      }
-    } catch (err) {
-      if (err instanceof UnauthorizedError) return handleUnauthorized();
-      console.error("Erreur mise à jour commande de stock :", err);
-    }
-  };
-
-  const deleteStockOrder = async (so: StockOrder) => {
-    try {
-      const res = await apiFetch(so["@id"], { method: "DELETE" });
-      if (res.ok || res.status === 204) {
-        setStockOrders((prev) => prev.filter((item) => item["@id"] !== so["@id"]));
-      }
-    } catch (err) {
-      if (err instanceof UnauthorizedError) return handleUnauthorized();
     }
   };
 
@@ -501,9 +429,7 @@ export default function KanbanPage() {
   });
 
   const lowStockCount = stockItems.filter((s) => s.quantity <= s.alertThreshold).length;
-  const openStockOrders = stockOrders.filter(
-    (so) => so.status === "pending" || so.status === "ordered",
-  );
+  const openStockOrders = orders.filter((o) => o.isStockOrder && o.status !== "completed");
 
   return (
     <main className="min-h-screen bg-neutral-950 p-6 text-neutral-100">
@@ -511,7 +437,7 @@ export default function KanbanPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ERP Atelier VisuAlpes — Production & Stocks</h1>
           <p className="text-sm text-neutral-400">
-            Écouteur USB actif • 1 support en fabrication consomme 1 patin TPU + 1 socle ciment + 1 plaque bois
+            Fiches clients (gris) & fiches de réapprovisionnement stock atelier (orange) dans le même flux Kanban
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -549,17 +475,17 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* PANNEAU GESTION DE STOCK & COMMANDES DE RÉAPPROVISIONNEMENT AUTOMATISÉES */}
+      {/* PANNEAU GESTION DE STOCK COMPOSANTS ATELIER */}
       {isAdmin && (
         <section className="mb-8 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-300">
-                Gestion des Stocks Composants & Réapprovisionnement Auto
+                Stocks Composants Atelier (Patin TPU • Socle ciment • Plaque bois)
               </h2>
               {lowStockCount > 0 ? (
-                <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-300">
-                  {lowStockCount} composant(s) sous le seuil d&apos;alerte
+                <span className="rounded-full border border-orange-500/50 bg-orange-500/15 px-2.5 py-0.5 text-xs font-medium text-orange-300">
+                  {lowStockCount} composant(s) sous seuil → fiche de production stock dans le Kanban
                 </span>
               ) : (
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
@@ -568,15 +494,15 @@ export default function KanbanPage() {
               )}
             </div>
             <span className="text-xs text-neutral-500">
-              Commande de stock générée automatiquement dès que Quantité ≤ Seuil d&apos;alerte
+              Sous le seuil d&apos;alerte, une fiche orange « STOCK ATELIER » tombe automatiquement dans « En attente »
             </span>
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {stockItems.map((item) => {
               const isAlert = item.quantity <= item.alertThreshold;
-              const activeOrder = openStockOrders.find(
-                (so) => so.stockItem?.code === item.code || so.stockItem?.id === item.id,
+              const activeKanbanOrder = openStockOrders.find(
+                (o) => o.targetStockItem?.code === item.code || o.targetStockItem?.id === item.id,
               );
 
               return (
@@ -584,7 +510,7 @@ export default function KanbanPage() {
                   key={item["@id"]}
                   className={`flex flex-col justify-between rounded-lg border p-3.5 ${
                     isAlert
-                      ? "border-rose-500/50 bg-rose-950/20"
+                      ? "border-orange-500/60 bg-orange-950/20"
                       : "border-neutral-800 bg-neutral-900"
                   }`}
                 >
@@ -599,13 +525,13 @@ export default function KanbanPage() {
                         <strong className="text-neutral-200">
                           {item.alertThreshold} {item.unit}
                         </strong>{" "}
-                        • Lot auto : {item.reorderQuantity} {item.unit}
+                        • Lot production auto : {item.reorderQuantity} {item.unit}
                       </p>
                     </div>
                     <span
                       className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${
                         isAlert
-                          ? "border-rose-500/40 bg-rose-500/15 text-rose-300"
+                          ? "border-orange-500/50 bg-orange-500/20 text-orange-300"
                           : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                       }`}
                     >
@@ -618,7 +544,7 @@ export default function KanbanPage() {
                       <span className="text-xs text-neutral-400">Disponible</span>
                       <div
                         className={`font-mono text-2xl font-bold ${
-                          isAlert ? "text-rose-400" : "text-neutral-100"
+                          isAlert ? "text-orange-400" : "text-neutral-100"
                         }`}
                       >
                         {item.quantity}{" "}
@@ -650,11 +576,11 @@ export default function KanbanPage() {
                     </div>
                   </div>
 
-                  {activeOrder && (
-                    <div className="mt-2.5 flex items-center justify-between rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200">
+                  {activeKanbanOrder && (
+                    <div className="mt-2.5 flex items-center justify-between rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-1.5 text-xs text-orange-200">
                       <span>
-                        Réappro en cours : <strong>+{activeOrder.quantity} {item.unit}</strong> (
-                        {STOCK_ORDER_STATUS[activeOrder.status].label})
+                        Fiche Kanban <strong>CMD #{activeKanbanOrder.id}</strong> en cours (
+                        {COLUMNS.find((c) => c.id === activeKanbanOrder.status)?.title})
                       </span>
                     </div>
                   )}
@@ -662,79 +588,10 @@ export default function KanbanPage() {
               );
             })}
           </div>
-
-          {/* Liste des commandes de stock automatiques / en cours */}
-          {stockOrders.length > 0 && (
-            <div className="mt-4 border-t border-neutral-800 pt-4">
-              <h3 className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                Commandes de réapprovisionnement ({openStockOrders.length} active
-                {openStockOrders.length > 1 ? "s" : ""})
-              </h3>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                {stockOrders.map((so) => {
-                  const statusMeta = STOCK_ORDER_STATUS[so.status] ?? STOCK_ORDER_STATUS.pending;
-                  return (
-                    <div
-                      key={so["@id"]}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-950/70 px-3 py-2 text-xs"
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-neutral-200">
-                            {so.stockItem?.name ?? "Composant"}
-                          </span>
-                          <span className="font-mono font-bold text-emerald-400">
-                            +{so.quantity} {so.stockItem?.unit ?? "pcs"}
-                          </span>
-                          {so.isAuto && (
-                            <span className="rounded border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.2 text-[10px] text-purple-300">
-                              AUTO
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-neutral-500">
-                          <span className={`rounded border px-1.5 py-0.2 ${statusMeta.badge}`}>
-                            {statusMeta.label}
-                          </span>
-                          <span>{new Date(so.createdAt).toLocaleDateString("fr-FR")}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        {so.status === "pending" && (
-                          <button
-                            onClick={() => updateStockOrderStatus(so, "ordered")}
-                            className="rounded border border-sky-700 bg-sky-950/50 px-2 py-1 text-[11px] text-sky-300 hover:bg-sky-900/60"
-                          >
-                            Commander
-                          </button>
-                        )}
-                        {(so.status === "pending" || so.status === "ordered") && (
-                          <button
-                            onClick={() => updateStockOrderStatus(so, "received")}
-                            className="rounded bg-emerald-500 px-2 py-1 text-[11px] font-medium text-neutral-950 hover:bg-emerald-400"
-                          >
-                            Réceptionner
-                          </button>
-                        )}
-                        <button
-                          onClick={() => deleteStockOrder(so)}
-                          title="Supprimer cette commande de stock"
-                          className="rounded px-1.5 py-1 text-neutral-500 hover:bg-neutral-800 hover:text-rose-400"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </section>
       )}
 
-      {/* TABLEAU KANBAN DES FICHES DE COMMANDE */}
+      {/* TABLEAU KANBAN : FICHES CLIENTS + FICHES DE STOCK ATELIER (COULEUR DIFFÉRENCIÉE) */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {COLUMNS.map((col) => {
           const colOrders = orders.filter((o) => o.status === col.id);
@@ -753,6 +610,7 @@ export default function KanbanPage() {
 
               <div className="flex flex-1 flex-col gap-3">
                 {colOrders.map((order) => {
+                  const isStock = Boolean(order.isStockOrder);
                   const accountObj =
                     typeof order.account === "object" && order.account !== null
                       ? order.account
@@ -763,25 +621,44 @@ export default function KanbanPage() {
                   return (
                     <div
                       key={order["@id"]}
-                      className="flex flex-col gap-2.5 rounded-lg border border-neutral-800 bg-neutral-900 p-3.5 shadow-sm hover:border-neutral-700"
+                      className={`flex flex-col gap-2.5 rounded-lg border p-3.5 shadow-sm transition-colors ${
+                        isStock
+                          ? "border-orange-500/70 bg-gradient-to-b from-orange-950/45 via-orange-950/20 to-neutral-900 hover:border-orange-400"
+                          : "border-neutral-800 bg-neutral-900 hover:border-neutral-700"
+                      }`}
                     >
                       {/* En-tête de la fiche */}
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-bold text-neutral-100">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`font-mono text-sm font-bold ${
+                                isStock ? "text-orange-300" : "text-neutral-100"
+                              }`}
+                            >
                               CMD #{order.id}
                             </span>
-                            {order.stockDeducted && (
-                              <span
-                                title="Les composants (patin TPU, socle ciment, plaque bois) ont été déduits du stock"
-                                className="rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.2 text-[10px] text-sky-300"
-                              >
-                                Stock déduit
+                            {isStock ? (
+                              <span className="rounded border border-orange-400/60 bg-orange-500/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-200">
+                                Réappro Stock Atelier
+                              </span>
+                            ) : (
+                              order.stockDeducted && (
+                                <span
+                                  title="Les composants (patin TPU, socle ciment, plaque bois) ont été déduits du stock"
+                                  className="rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.2 text-[10px] text-sky-300"
+                                >
+                                  Stock déduit
+                                </span>
+                              )
+                            )}
+                            {isStock && order.stockCredited && (
+                              <span className="rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.2 text-[10px] text-emerald-300">
+                                Stock crédité
                               </span>
                             )}
                           </div>
-                          <span className="text-[11px] text-neutral-500">
+                          <span className="text-[11px] text-neutral-400">
                             Créée le {new Date(order.createdAt).toLocaleDateString("fr-FR")}
                           </span>
                         </div>
@@ -790,14 +667,14 @@ export default function KanbanPage() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => openEditModal(order)}
-                              className="rounded border border-neutral-700 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                              className="rounded border border-neutral-700 bg-neutral-900/80 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
                             >
                               Modifier
                             </button>
                             <button
                               onClick={() => deleteOrder(order)}
                               title="Supprimer la fiche"
-                              className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                              className="rounded border border-rose-900/60 bg-rose-950/40 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
                             >
                               Suppr.
                             </button>
@@ -805,24 +682,47 @@ export default function KanbanPage() {
                         )}
                       </div>
 
-                      {/* Client */}
-                      <div className="rounded-md border border-neutral-800/90 bg-neutral-950/60 px-2.5 py-1.5 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-neutral-200">
-                            {accountObj ? accountObj.name : "Client rattaché"}
-                          </span>
-                          {accountObj?.type && (
-                            <span className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
-                              {accountObj.type}
+                      {/* Origine : Client OU Production Stock Interne */}
+                      <div
+                        className={`rounded-md border px-2.5 py-1.5 text-xs ${
+                          isStock
+                            ? "border-orange-500/40 bg-orange-950/40 text-orange-200"
+                            : "border-neutral-800/90 bg-neutral-950/60 text-neutral-200"
+                        }`}
+                      >
+                        {isStock ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold">
+                              Atelier VisuAlpes — {order.targetStockItem?.name ?? "Composant stock"}
                             </span>
-                          )}
-                        </div>
+                            <span className="rounded bg-orange-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-orange-300">
+                              INTERNE
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">
+                              {accountObj ? accountObj.name : "Client rattaché"}
+                            </span>
+                            {accountObj?.type && (
+                              <span className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
+                                {accountObj.type}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Détail des articles de la commande */}
-                      <div className="flex flex-col gap-1 rounded-md border border-neutral-800/70 bg-neutral-950/40 p-2 text-xs">
+                      {/* Détail complet de la commande */}
+                      <div
+                        className={`flex flex-col gap-1 rounded-md border p-2 text-xs ${
+                          isStock
+                            ? "border-orange-500/30 bg-neutral-950/60"
+                            : "border-neutral-800/70 bg-neutral-950/40"
+                        }`}
+                      >
                         <div className="mb-0.5 flex items-center justify-between text-[11px] font-medium text-neutral-400">
-                          <span>Détail des supports</span>
+                          <span>{isStock ? "Lot à fabriquer" : "Détail des supports"}</span>
                           <span>Total : {totalSupports} pcs</span>
                         </div>
                         {items.length > 0 ? (
@@ -830,10 +730,16 @@ export default function KanbanPage() {
                             {items.map((item, idx) => (
                               <li
                                 key={item["@id"] ?? `${order.id}-item-${idx}`}
-                                className="flex items-center justify-between gap-2 text-neutral-300"
+                                className="flex items-center justify-between gap-2 text-neutral-200"
                               >
                                 <span className="truncate">{item.productName}</span>
-                                <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.2 font-mono text-[11px] font-semibold text-neutral-200">
+                                <span
+                                  className={`shrink-0 rounded px-1.5 py-0.2 font-mono text-[11px] font-semibold ${
+                                    isStock
+                                      ? "bg-orange-500/25 text-orange-200"
+                                      : "bg-neutral-800 text-neutral-200"
+                                  }`}
+                                >
                                   × {item.quantity}
                                 </span>
                               </li>
@@ -867,7 +773,11 @@ export default function KanbanPage() {
                                 COLUMNS[COLUMNS.findIndex((c) => c.id === col.id) + 1].id;
                               updateStatus(order["@id"], nextStatus);
                             }}
-                            className="flex-1 rounded bg-neutral-100 py-1 text-[11px] font-medium text-neutral-900 hover:bg-white"
+                            className={`flex-1 rounded py-1 text-[11px] font-semibold ${
+                              isStock
+                                ? "bg-orange-400 text-neutral-950 hover:bg-orange-300"
+                                : "bg-neutral-100 text-neutral-900 hover:bg-white"
+                            }`}
                           >
                             Avancer →
                           </button>
@@ -904,21 +814,63 @@ export default function KanbanPage() {
               </button>
             </div>
 
+            <div className="flex gap-2 rounded-lg border border-neutral-800 bg-neutral-950 p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setFormIsStockOrder(false)}
+                className={`flex-1 rounded-md py-1.5 font-medium ${
+                  !formIsStockOrder
+                    ? "bg-neutral-800 text-white"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Commande Client
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormIsStockOrder(true)}
+                className={`flex-1 rounded-md py-1.5 font-medium ${
+                  formIsStockOrder
+                    ? "bg-orange-500/25 text-orange-300 border border-orange-500/40"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Production Stock Atelier (Orange)
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-xs text-neutral-300">
-                Client (Compte)
-                <select
-                  value={formAccountIri}
-                  onChange={(e) => setFormAccountIri(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-                >
-                  {accounts.map((acc) => (
-                    <option key={acc["@id"]} value={acc["@id"]}>
-                      {acc.name} ({acc.type})
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {formIsStockOrder ? (
+                <label className="flex flex-col gap-1 text-xs text-orange-300">
+                  Composant de stock à réapprovisionner
+                  <select
+                    value={formTargetStockIri}
+                    onChange={(e) => setFormTargetStockIri(e.target.value)}
+                    className="rounded border border-orange-500/50 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+                  >
+                    {stockItems.map((si) => (
+                      <option key={si["@id"]} value={si["@id"]}>
+                        {si.name} (stock: {si.quantity})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                  Client (Compte)
+                  <select
+                    value={formAccountIri}
+                    onChange={(e) => setFormAccountIri(e.target.value)}
+                    className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc["@id"]} value={acc["@id"]}>
+                        {acc.name} ({acc.type})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <label className="flex flex-col gap-1 text-xs text-neutral-300">
                 Statut de production
@@ -939,7 +891,7 @@ export default function KanbanPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-neutral-300">
-                  Articles commandés (supports NFC)
+                  Lignes de la fiche (détail de la commande)
                 </span>
                 <button
                   type="button"
@@ -961,7 +913,7 @@ export default function KanbanPage() {
                     <input
                       type="text"
                       required
-                      placeholder="Nom du produit (ex: Support Comptoir NFC Bois)"
+                      placeholder="Désignation de l'article"
                       value={item.productName}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -1048,7 +1000,7 @@ export default function KanbanPage() {
             </label>
 
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
-              Seuil d&apos;alerte déclenchant une commande auto ({editingStock.unit})
+              Seuil d&apos;alerte déclenchant une fiche Kanban auto ({editingStock.unit})
               <input
                 type="number"
                 min={0}
@@ -1060,7 +1012,7 @@ export default function KanbanPage() {
             </label>
 
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
-              Quantité commandée automatiquement ({editingStock.unit})
+              Quantité à produire automatiquement ({editingStock.unit})
               <input
                 type="number"
                 min={1}

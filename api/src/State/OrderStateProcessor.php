@@ -31,7 +31,7 @@ final readonly class OrderStateProcessor implements ProcessorInterface
                     $item->setParentOrder($data);
                 }
             }
-            $this->stockManager->consumeForOrderIfNeeded($data);
+            $this->stockManager->handleOrderTransition($data);
         }
 
         return $this->persistProcessor->process($data, $operation, $uriVariables, $context);

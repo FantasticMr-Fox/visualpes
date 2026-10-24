@@ -34,35 +34,29 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 class StockItem
 {
-    public const DEFAULT_COMPONENTS = [
-        ['code' => 'patin_tpu', 'name' => 'Patin TPU', 'quantity' => 25, 'alertThreshold' => 10, 'reorderQuantity' => 50, 'unit' => 'pcs'],
-        ['code' => 'socle_ciment', 'name' => 'Socle ciment', 'quantity' => 25, 'alertThreshold' => 10, 'reorderQuantity' => 50, 'unit' => 'pcs'],
-        ['code' => 'plaque_bois', 'name' => 'Plaque bois', 'quantity' => 25, 'alertThreshold' => 10, 'reorderQuantity' => 50, 'unit' => 'pcs'],
-    ];
-
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['stock_item:read', 'stock_order:read'])]
+    #[Groups(['stock_item:read', 'order:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 60, unique: true)]
     #[Assert\NotBlank]
-    #[Groups(['stock_item:read', 'stock_item:write', 'stock_order:read'])]
+    #[Groups(['stock_item:read', 'stock_item:write', 'order:read'])]
     private ?string $code = null;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
-    #[Groups(['stock_item:read', 'stock_item:write', 'stock_order:read'])]
+    #[Groups(['stock_item:read', 'stock_item:write', 'order:read'])]
     private ?string $name = null;
 
     #[ORM\Column]
-    #[Groups(['stock_item:read', 'stock_item:write', 'stock_order:read'])]
+    #[Groups(['stock_item:read', 'stock_item:write'])]
     private int $quantity = 0;
 
     #[ORM\Column]
     #[Assert\PositiveOrZero]
-    #[Groups(['stock_item:read', 'stock_item:write', 'stock_order:read'])]
+    #[Groups(['stock_item:read', 'stock_item:write'])]
     private int $alertThreshold = 10;
 
     #[ORM\Column]
@@ -71,7 +65,7 @@ class StockItem
     private int $reorderQuantity = 50;
 
     #[ORM\Column(length: 20)]
-    #[Groups(['stock_item:read', 'stock_item:write', 'stock_order:read'])]
+    #[Groups(['stock_item:read', 'stock_item:write', 'order:read'])]
     private string $unit = 'pcs';
 
     #[ORM\Column]
@@ -79,15 +73,15 @@ class StockItem
     private ?\DateTimeImmutable $updatedAt = null;
 
     /**
-     * @var Collection<int, StockOrder>
+     * @var Collection<int, Order>
      */
-    #[ORM\OneToMany(targetEntity: StockOrder::class, mappedBy: 'stockItem', orphanRemoval: true)]
-    private Collection $stockOrders;
+    #[ORM\OneToMany(targetEntity: Order::class, mappedBy: 'targetStockItem')]
+    private Collection $stockReplenishmentOrders;
 
     public function __construct()
     {
         $this->updatedAt = new \DateTimeImmutable();
-        $this->stockOrders = new ArrayCollection();
+        $this->stockReplenishmentOrders = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -182,10 +176,10 @@ class StockItem
     }
 
     /**
-     * @return Collection<int, StockOrder>
+     * @return Collection<int, Order>
      */
-    public function getStockOrders(): Collection
+    public function getStockReplenishmentOrders(): Collection
     {
-        return $this->stockOrders;
+        return $this->stockReplenishmentOrders;
     }
 }

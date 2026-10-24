@@ -16,3 +16,4 @@ class StockItemRepository extends ServiceEntityRepository
         parent::__construct($registry, StockItem::class);
     }
 }
+
