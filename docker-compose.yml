@@ -1,0 +1,54 @@
+services:
+  api:
+    build: ./api
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SERVER_NAME: ":80"
+      # Configuration du Hub interne FrankenPHP
+      MERCURE_PUBLISHER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
+      MERCURE_SUBSCRIBER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
+      # Configuration du bundle Symfony
+      MERCURE_URL: http://127.0.0.1/.well-known/mercure
+      MERCURE_PUBLIC_URL: http://localhost/.well-known/mercure
+      MERCURE_JWT_SECRET: '!ChangeThisMercureHubJWTSecretKey!'
+    volumes:
+      - ./api:/app
+      - ./api/Caddyfile:/etc/frankenphp/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - database
+
+  database:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: visualpes
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  pwa:
+      image: node:22-alpine
+      working_dir: /app
+      volumes:
+        - ./pwa:/app
+      command: sh -c "npm install && npm run dev"
+      ports:
+        - "3000:3000"
+      environment:
+        - NEXT_PUBLIC_API_URL=http://localhost/api
+        - NEXT_PUBLIC_MERCURE_URL=http://localhost/.well-known/mercure
+      restart: unless-stopped
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  db_data: {}

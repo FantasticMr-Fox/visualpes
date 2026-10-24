@@ -1,0 +1,23 @@
+{
+	frankenphp
+	order mercure after encode
+}
+
+:80 {
+	root * /app/public
+
+	@compressible not path /.well-known/mercure*
+	encode @compressible zstd br gzip
+
+	mercure {
+		protocol_version_compatibility 8
+		publisher_jwt {$MERCURE_PUBLISHER_JWT_KEY:!ChangeThisMercureHubJWTSecretKey!}
+		subscriber_jwt {$MERCURE_SUBSCRIBER_JWT_KEY:!ChangeThisMercureHubJWTSecretKey!}
+		cors_origins *
+		publish_origins *
+		anonymous
+		subscriptions
+	}
+
+	php_server
+}
