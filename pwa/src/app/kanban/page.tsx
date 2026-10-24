@@ -21,6 +21,7 @@ import type {
   PropertyItem,
   StockItem,
   SupportTicketItem,
+  ZoneItem,
 } from "@/types/erp";
 import { Sidebar } from "@/components/erp/Sidebar";
 import { StocksView } from "@/components/erp/StocksView";
@@ -30,6 +31,7 @@ import {
   formatOrderBarcode,
   parseScannedOrderId,
 } from "@/components/erp/WorkOrderPrintModal";
+import { NfcEncodingModal } from "@/components/erp/NfcEncodingModal";
 
 const COLUMNS = [
   { id: "pending", title: "En attente", color: "border-amber-500/40 bg-amber-500/5 text-amber-400" },
@@ -65,6 +67,7 @@ export default function KanbanPage() {
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [properties, setProperties] = useState<PropertyItem[]>([]);
+  const [zones, setZones] = useState<ZoneItem[]>([]);
   const [nfcTags, setNfcTags] = useState<NfcTagItem[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicketItem[]>([]);
 
@@ -95,6 +98,10 @@ export default function KanbanPage() {
   const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
   const printingOrder = orders.find((o) => o.id === printingOrderId) ?? null;
 
+  // Modale Poste d'Encodage NFC Atelier
+  const [encodingOrderId, setEncodingOrderId] = useState<number | null>(null);
+  const encodingOrder = orders.find((o) => o.id === encodingOrderId) ?? null;
+
   const token = useSyncExternalStore<string | null | undefined>(subscribeToken, getToken, getServerToken);
   const authReady = typeof token === "string";
   const isAdmin = authReady && getTokenRoles().includes("ROLE_ADMIN");
@@ -121,24 +128,27 @@ export default function KanbanPage() {
   const refreshAllData = useCallback(async () => {
     if (!authReady) return;
     try {
-      const [ordRes, accRes, propRes, ticketRes] = await Promise.all([
+      const [ordRes, accRes, propRes, zoneRes, ticketRes] = await Promise.all([
         apiFetch(`${API_URL}/orders`),
         apiFetch(`${API_URL}/accounts`),
         apiFetch(`${API_URL}/properties`),
+        apiFetch(`${API_URL}/zones`),
         apiFetch(`${API_URL}/support_tickets`),
       ]);
 
       const topic = ordRes.headers.get("X-Mercure-Topic") ?? `${API_ORIGIN}/api/orders/{id}`;
-      const [ordData, accData, propData, ticketData] = await Promise.all([
+      const [ordData, accData, propData, zoneData, ticketData] = await Promise.all([
         ordRes.json(),
         accRes.json(),
         propRes.json(),
+        zoneRes.json(),
         ticketRes.json(),
       ]);
 
       setOrders(extractMembers<Order>(ordData));
       setAccounts(extractMembers<AccountSummary>(accData));
       setProperties(extractMembers<PropertyItem>(propData));
+      setZones(extractMembers<ZoneItem>(zoneData));
       setSupportTickets(extractMembers<SupportTicketItem>(ticketData));
       setMercureTopic((prev) => prev ?? topic);
 
@@ -479,13 +489,80 @@ export default function KanbanPage() {
     else setError("Échec création Tag NFC (UID déjà utilisé ou invalide).");
   };
 
-  const updateNfcStatus = async (tagIri: string, status: NfcTagItem["status"]) => {
+  const updateNfcTag = async (
+    tagIri: string,
+    payload: {
+      status?: NfcTagItem["status"];
+      zone?: string | null;
+      orderItem?: string | null;
+    },
+  ) => {
     const res = await apiFetch(tagIri, {
       method: "PATCH",
       headers: { "Content-Type": "application/merge-patch+json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) await refreshAllData();
+  };
+
+  const encodeTagForOrderItem = async (payload: {
+    existingTagIri?: string;
+    shortUid: string;
+    orderItemIri: string;
+    zoneIri?: string | null;
+  }) => {
+    setError(null);
+    const targetStatus: NfcTagItem["status"] = payload.zoneIri ? "assigned" : "encoded";
+    const res = payload.existingTagIri
+      ? await apiFetch(payload.existingTagIri, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/merge-patch+json" },
+          body: JSON.stringify({
+            orderItem: payload.orderItemIri,
+            zone: payload.zoneIri ?? null,
+            status: targetStatus,
+          }),
+        })
+      : await apiFetch(`${API_URL}/nfc_tags`, {
+          method: "POST",
+          headers: { "Content-Type": "application/ld+json" },
+          body: JSON.stringify({
+            shortUid: payload.shortUid,
+            orderItem: payload.orderItemIri,
+            zone: payload.zoneIri ?? null,
+            status: targetStatus,
+          }),
+        });
+
+    if (res.ok) {
+      await refreshAllData();
+    } else {
+      setError("Impossible d'encoder ce tag NFC (vérifiez que l'UID court est unique).");
+    }
+  };
+
+  const unlinkTag = async (tagIri: string) => {
+    await updateNfcTag(tagIri, {
+      orderItem: null,
+      zone: null,
+      status: "stock",
+    });
+  };
+
+  const createQuickZone = async (payload: {
+    name: string;
+    mountType: string;
+    property: string;
+  }): Promise<ZoneItem | null> => {
+    const res = await apiFetch(`${API_URL}/zones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/ld+json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const created = (await res.json()) as ZoneItem;
+    await refreshAllData();
+    return created;
   };
 
   const deleteNfcTag = async (tagIri: string) => {
@@ -843,6 +920,20 @@ export default function KanbanPage() {
                                 </div>
 
                                 <div className="flex items-center gap-1">
+                                  {isAdmin && !isStock && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEncodingOrderId(order.id)}
+                                      title="Ouvrir le poste d'encodage NFC pour cette commande"
+                                      className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${
+                                        col.id === "quality_check"
+                                          ? "border-purple-400/70 bg-purple-500/25 text-purple-200 hover:bg-purple-500/35"
+                                          : "border-purple-800/60 bg-purple-950/35 text-purple-300 hover:bg-purple-900/50"
+                                      }`}
+                                    >
+                                      NFC
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => setPrintingOrderId(order.id)}
@@ -918,24 +1009,50 @@ export default function KanbanPage() {
                                   <span>Total : {totalSupports} pcs</span>
                                 </div>
                                 {items.length > 0 ? (
-                                  <ul className="flex flex-col gap-1">
-                                    {items.map((item, idx) => (
-                                      <li
-                                        key={item["@id"] ?? `${order.id}-item-${idx}`}
-                                        className="flex items-center justify-between gap-2 text-neutral-200"
-                                      >
-                                        <span className="truncate">{item.productName}</span>
-                                        <span
-                                          className={`shrink-0 rounded px-1.5 py-0.2 font-mono text-[11px] font-semibold ${
-                                            isStock
-                                              ? "bg-orange-500/25 text-orange-200"
-                                              : "bg-neutral-800 text-neutral-200"
-                                          }`}
+                                  <ul className="flex flex-col gap-1.5">
+                                    {items.map((item, idx) => {
+                                      const itemTags = nfcTags.filter(
+                                        (t) =>
+                                          item["@id"] &&
+                                          t.orderItem === item["@id"] &&
+                                          t.status !== "defective",
+                                      );
+                                      return (
+                                        <li
+                                          key={item["@id"] ?? `${order.id}-item-${idx}`}
+                                          className="flex flex-col gap-1"
                                         >
-                                          × {item.quantity}
-                                        </span>
-                                      </li>
-                                    ))}
+                                          <div className="flex items-center justify-between gap-2 text-neutral-200">
+                                            <span className="truncate">{item.productName}</span>
+                                            <span
+                                              className={`shrink-0 rounded px-1.5 py-0.2 font-mono text-[11px] font-semibold ${
+                                                isStock
+                                                  ? "bg-orange-500/25 text-orange-200"
+                                                  : "bg-neutral-800 text-neutral-200"
+                                              }`}
+                                            >
+                                              × {item.quantity}
+                                            </span>
+                                          </div>
+                                          {!isStock && itemTags.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-1">
+                                              {itemTags.map((tg) => (
+                                                <a
+                                                  key={tg["@id"]}
+                                                  href={`/g/${tg.shortUid}`}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  title="Ouvrir le guide public voyageur de cette puce NFC"
+                                                  className="rounded border border-purple-500/40 bg-purple-500/15 px-1.5 py-0.2 font-mono text-[10px] font-semibold text-purple-300 hover:bg-purple-500/30"
+                                                >
+                                                  NFC #{tg.shortUid} ↗
+                                                </a>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </li>
+                                      );
+                                    })}
                                   </ul>
                                 ) : (
                                   <p className="text-[11px] italic text-neutral-500">
@@ -1019,8 +1136,11 @@ export default function KanbanPage() {
         {activeTab === "nfc" && isAdmin && (
           <NfcTagsView
             nfcTags={nfcTags}
+            orders={orders}
+            properties={properties}
+            zones={zones}
             onCreateNfcTag={createNfcTag}
-            onUpdateNfcStatus={updateNfcStatus}
+            onUpdateNfcTag={updateNfcTag}
             onDeleteNfcTag={deleteNfcTag}
           />
         )}
@@ -1292,6 +1412,19 @@ export default function KanbanPage() {
         order={printingOrder}
         onClose={() => setPrintingOrderId(null)}
         onSimulateScan={(code) => processHardwareScan(code)}
+      />
+
+      {/* MODALE POSTE D'ENCODAGE NFC ATELIER */}
+      <NfcEncodingModal
+        order={encodingOrder}
+        nfcTags={nfcTags}
+        properties={properties}
+        zones={zones}
+        onClose={() => setEncodingOrderId(null)}
+        onEncodeTagForOrderItem={encodeTagForOrderItem}
+        onUnlinkTag={unlinkTag}
+        onCreateQuickZone={createQuickZone}
+        onCompleteOrder={(orderIri) => updateStatus(orderIri, "completed")}
       />
     </div>
   );

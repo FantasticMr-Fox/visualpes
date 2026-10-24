@@ -7,11 +7,21 @@ export interface AccountSummary {
   type: string;
 }
 
+export interface NfcTagEmbedded {
+  "@id": string;
+  id: number;
+  shortUid: string;
+  status: "stock" | "encoded" | "assigned" | "defective";
+  encodeAt?: string | null;
+  zone?: string | null;
+}
+
 export interface OrderItem {
   "@id"?: string;
   id?: number;
   productName: string;
   quantity: number;
+  nfcTags?: NfcTagEmbedded[];
 }
 
 export interface StockItemSummary {
@@ -40,6 +50,14 @@ export interface Order {
   targetStockItem?: StockItemSummary | null;
   account?: AccountSummary | string | null;
   orderItems?: OrderItem[];
+}
+
+export interface ZoneItem {
+  "@id": string;
+  id: number;
+  name: string;
+  mountType?: string | null;
+  property: string;
 }
 
 export interface PropertyItem {
@@ -74,4 +92,3 @@ export interface SupportTicketItem {
   aiConfidence?: number | null;
   account: string;
 }
-

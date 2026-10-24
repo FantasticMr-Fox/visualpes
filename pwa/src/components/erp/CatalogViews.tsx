@@ -4,8 +4,10 @@ import React, { useState } from "react";
 import type {
   AccountSummary,
   NfcTagItem,
+  Order,
   PropertyItem,
   SupportTicketItem,
+  ZoneItem,
 } from "@/types/erp";
 
 interface ClientsViewProps {
@@ -359,8 +361,14 @@ export function ClientsView({
 
 interface NfcTagsViewProps {
   nfcTags: NfcTagItem[];
+  orders: Order[];
+  properties: PropertyItem[];
+  zones: ZoneItem[];
   onCreateNfcTag: (payload: { shortUid: string; status: NfcTagItem["status"] }) => Promise<void>;
-  onUpdateNfcStatus: (tagIri: string, status: NfcTagItem["status"]) => Promise<void>;
+  onUpdateNfcTag: (
+    tagIri: string,
+    payload: { status?: NfcTagItem["status"]; zone?: string | null },
+  ) => Promise<void>;
   onDeleteNfcTag: (tagIri: string) => Promise<void>;
 }
 
@@ -373,13 +381,17 @@ const NFC_STATUS_BADGES: Record<NfcTagItem["status"], { label: string; cls: stri
 
 export function NfcTagsView({
   nfcTags,
+  orders,
+  properties,
+  zones,
   onCreateNfcTag,
-  onUpdateNfcStatus,
+  onUpdateNfcTag,
   onDeleteNfcTag,
 }: NfcTagsViewProps) {
   const [shortUid, setShortUid] = useState("");
   const [status, setStatus] = useState<NfcTagItem["status"]>("stock");
   const [saving, setSaving] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,13 +405,27 @@ export function NfcTagsView({
     }
   };
 
+  const copyTagUrl = async (uid: string) => {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/g/${uid}`
+        : `http://localhost:3000/g/${uid}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(uid);
+      setTimeout(() => setCopiedId((prev) => (prev === uid ? null : prev)), 2000);
+    } catch {
+      // Fallback silencieux
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 pb-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Tags NFC Atelier</h1>
           <p className="text-sm text-neutral-400">
-            Inventaire des puces NFC, UID courts (`/g/[shortUid]`) et statut d&apos;encodage
+            Inventaire des puces NFC, UID courts (`/g/[shortUid]`), affectation commande/zone et test du portail voyageur
           </p>
         </div>
         <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
@@ -434,36 +460,87 @@ export function NfcTagsView({
 
       {nfcTags.length === 0 ? (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500">
-          Aucun tag NFC enregistré. Ajoutez un UID court ci-dessus pour préparer l&apos;encodage.
+          Aucun tag NFC enregistré. Ajoutez un UID court ci-dessus ou encodez une puce depuis une fiche commande.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {nfcTags.map((tag) => {
             const badge = NFC_STATUS_BADGES[tag.status] ?? NFC_STATUS_BADGES.stock;
+            const parentOrder = orders.find((o) =>
+              (o.orderItems ?? []).some((it) => it["@id"] === tag.orderItem),
+            );
+            const orderItemObj = parentOrder?.orderItems?.find(
+              (it) => it["@id"] === tag.orderItem,
+            );
+
             return (
               <div
                 key={tag["@id"]}
                 className="flex flex-col justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 p-4"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-mono text-base font-bold text-neutral-100">
-                      #{tag.shortUid}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-mono text-base font-bold text-neutral-100">
+                        #{tag.shortUid}
+                      </div>
+                      <div className="text-[11px] text-neutral-500">
+                        URL NDEF : <span className="font-mono text-neutral-300">/g/{tag.shortUid}</span>
+                      </div>
                     </div>
-                    <div className="text-[11px] text-neutral-500">
-                      URL publique : <span className="font-mono text-neutral-300">/g/{tag.shortUid}</span>
-                    </div>
+                    <span
+                      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badge.cls}`}
+                    >
+                      {badge.label}
+                    </span>
                   </div>
-                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badge.cls}`}>
-                    {badge.label}
-                  </span>
+
+                  {tag.encodeAt && (
+                    <div className="text-[11px] text-neutral-400">
+                      Encodé le {new Date(tag.encodeAt).toLocaleDateString("fr-FR")}
+                    </div>
+                  )}
+
+                  {parentOrder && (
+                    <div className="rounded-lg border border-purple-500/30 bg-purple-950/20 px-2.5 py-1.5 text-xs text-purple-200">
+                      <span className="font-mono font-bold">CMD #{parentOrder.id}</span> —{" "}
+                      {orderItemObj?.productName ?? "Support"}
+                    </div>
+                  )}
+
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                    Zone / Emplacement assigné
+                    <select
+                      value={tag.zone ?? ""}
+                      onChange={(e) =>
+                        onUpdateNfcTag(tag["@id"], {
+                          zone: e.target.value || null,
+                          status: e.target.value ? "assigned" : tag.status,
+                        })
+                      }
+                      className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-200"
+                    >
+                      <option value="">— Aucune zone assignée —</option>
+                      {zones.map((z) => {
+                        const p = properties.find((pr) => pr["@id"] === z.property);
+                        return (
+                          <option key={z["@id"]} value={z["@id"]}>
+                            {p ? `${p.name} — ` : ""}
+                            {z.name}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-neutral-800 pt-2.5 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-neutral-800 pt-2.5 text-xs">
                   <select
                     value={tag.status}
                     onChange={(e) =>
-                      onUpdateNfcStatus(tag["@id"], e.target.value as NfcTagItem["status"])
+                      onUpdateNfcTag(tag["@id"], {
+                        status: e.target.value as NfcTagItem["status"],
+                      })
                     }
                     className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-200"
                   >
@@ -472,13 +549,31 @@ export function NfcTagsView({
                     <option value="assigned">Assigné</option>
                     <option value="defective">Défectueux</option>
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteNfcTag(tag["@id"])}
-                    className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-1 text-xs text-rose-300 hover:bg-rose-900/50"
-                  >
-                    Suppr.
-                  </button>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => copyTagUrl(tag.shortUid)}
+                      className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-[11px] text-neutral-200 hover:bg-neutral-700"
+                    >
+                      {copiedId === tag.shortUid ? "✓ Copié" : "Copier URL"}
+                    </button>
+                    <a
+                      href={`/g/${tag.shortUid}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded border border-sky-500/40 bg-sky-500/15 px-2 py-1 text-[11px] font-medium text-sky-300 hover:bg-sky-500/25"
+                    >
+                      Tester ↗
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteNfcTag(tag["@id"])}
+                      className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                    >
+                      Suppr.
+                    </button>
+                  </div>
                 </div>
               </div>
             );

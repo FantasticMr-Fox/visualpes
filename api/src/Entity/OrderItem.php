@@ -51,6 +51,7 @@ class OrderItem
      */
     #[ORM\OneToMany(targetEntity: NfcTag::class, mappedBy: 'orderItem')]
     #[ApiProperty(security: "is_granted('ROLE_ADMIN')")]
+    #[Groups(['order:read'])]
     private Collection $nfcTags;
 
     public function __construct()
