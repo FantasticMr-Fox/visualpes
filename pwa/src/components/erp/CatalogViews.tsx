@@ -14,7 +14,14 @@ interface ClientsViewProps {
   isAdmin: boolean;
   accounts: AccountSummary[];
   properties: PropertyItem[];
+  zones: ZoneItem[];
+  nfcTags: NfcTagItem[];
   onCreateAccount: (payload: { name: string; type: string }) => Promise<void>;
+  onUpdateAccount: (
+    accountIri: string,
+    payload: { name: string; type: string },
+  ) => Promise<void>;
+  onDeleteAccount: (accountIri: string) => Promise<void>;
   onCreateProperty: (payload: {
     name: string;
     account: string;
@@ -23,23 +30,62 @@ interface ClientsViewProps {
     externalGuideUrl?: string;
     instructions?: string;
   }) => Promise<void>;
+  onUpdateProperty: (
+    propertyIri: string,
+    payload: {
+      name: string;
+      account: string;
+      wifiSSID?: string | null;
+      wifiPassword?: string | null;
+      externalGuideUrl?: string | null;
+      instructions?: string | null;
+    },
+  ) => Promise<void>;
   onDeleteProperty: (propertyIri: string) => Promise<void>;
+  onCreateZone: (payload: {
+    name: string;
+    mountType: string;
+    property: string;
+  }) => Promise<void>;
+  onUpdateZone: (
+    zoneIri: string,
+    payload: { name: string; mountType: string },
+  ) => Promise<void>;
+  onDeleteZone: (zoneIri: string) => Promise<void>;
+  onAssignTagToZone: (tagIri: string, zoneIri: string | null) => Promise<void>;
 }
+
+const MOUNT_TYPES = ["Comptoir", "Mural", "Table", "Chevet", "Entrée", "Extérieur"];
 
 export function ClientsView({
   isAdmin,
   accounts,
   properties,
+  zones,
+  nfcTags,
   onCreateAccount,
+  onUpdateAccount,
+  onDeleteAccount,
   onCreateProperty,
+  onUpdateProperty,
   onDeleteProperty,
+  onCreateZone,
+  onUpdateZone,
+  onDeleteZone,
+  onAssignTagToZone,
 }: ClientsViewProps) {
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState<string>("all");
+
+  // Modale création / édition Compte Client
   const [accountModal, setAccountModal] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<AccountSummary | null>(null);
   const [accName, setAccName] = useState("");
   const [accType, setAccType] = useState("B2B");
   const [savingAcc, setSavingAcc] = useState(false);
 
+  // Modale création / édition Propriété
   const [propModal, setPropModal] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<PropertyItem | null>(null);
   const [propName, setPropName] = useState("");
   const [propAccount, setPropAccount] = useState(accounts[0]?.["@id"] ?? "/api/accounts/1");
   const [propWifiSsid, setPropWifiSsid] = useState("");
@@ -48,55 +94,167 @@ export function ClientsView({
   const [propInstructions, setPropInstructions] = useState("");
   const [savingProp, setSavingProp] = useState(false);
 
+  // Modale création / édition Zone d'une propriété
+  const [zoneModal, setZoneModal] = useState(false);
+  const [editingZone, setEditingZone] = useState<ZoneItem | null>(null);
+  const [zonePropertyIri, setZonePropertyIri] = useState<string>("");
+  const [zoneName, setZoneName] = useState("");
+  const [zoneMountType, setZoneMountType] = useState("Comptoir");
+  const [savingZone, setSavingZone] = useState(false);
+
+  const openCreateAccountModal = () => {
+    setEditingAccount(null);
+    setAccName("");
+    setAccType("B2B");
+    setAccountModal(true);
+  };
+
+  const openEditAccountModal = (acc: AccountSummary) => {
+    setEditingAccount(acc);
+    setAccName(acc.name);
+    setAccType(acc.type || "B2B");
+    setAccountModal(true);
+  };
+
   const submitAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingAcc(true);
     try {
-      await onCreateAccount({ name: accName.trim(), type: accType });
+      if (editingAccount) {
+        await onUpdateAccount(editingAccount["@id"], {
+          name: accName.trim(),
+          type: accType,
+        });
+      } else {
+        await onCreateAccount({ name: accName.trim(), type: accType });
+      }
       setAccName("");
+      setEditingAccount(null);
       setAccountModal(false);
     } finally {
       setSavingAcc(false);
     }
   };
 
+  const openCreatePropertyModal = (defaultAccountIri?: string) => {
+    setEditingProperty(null);
+    setPropName("");
+    setPropAccount(
+      defaultAccountIri ??
+        (selectedAccountFilter !== "all"
+          ? selectedAccountFilter
+          : accounts[0]?.["@id"] ?? "/api/accounts/1"),
+    );
+    setPropWifiSsid("");
+    setPropWifiPass("");
+    setPropGuideUrl("");
+    setPropInstructions("");
+    setPropModal(true);
+  };
+
+  const openEditPropertyModal = (prop: PropertyItem) => {
+    setEditingProperty(prop);
+    setPropName(prop.name);
+    setPropAccount(prop.account);
+    setPropWifiSsid(prop.wifiSSID ?? "");
+    setPropWifiPass(prop.wifiPassword ?? "");
+    setPropGuideUrl(prop.externalGuideUrl ?? "");
+    setPropInstructions(prop.instructions ?? "");
+    setPropModal(true);
+  };
+
   const submitProperty = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProp(true);
     try {
-      await onCreateProperty({
-        name: propName.trim(),
-        account: propAccount || accounts[0]?.["@id"] || "/api/accounts/1",
-        wifiSSID: propWifiSsid.trim() || undefined,
-        wifiPassword: propWifiPass.trim() || undefined,
-        externalGuideUrl: propGuideUrl.trim() || undefined,
-        instructions: propInstructions.trim() || undefined,
-      });
-      setPropName("");
-      setPropWifiSsid("");
-      setPropWifiPass("");
-      setPropGuideUrl("");
-      setPropInstructions("");
+      const targetAccount = propAccount || accounts[0]?.["@id"] || "/api/accounts/1";
+      if (editingProperty) {
+        await onUpdateProperty(editingProperty["@id"], {
+          name: propName.trim(),
+          account: targetAccount,
+          wifiSSID: propWifiSsid.trim() || null,
+          wifiPassword: propWifiPass.trim() || null,
+          externalGuideUrl: propGuideUrl.trim() || null,
+          instructions: propInstructions.trim() || null,
+        });
+      } else {
+        await onCreateProperty({
+          name: propName.trim(),
+          account: targetAccount,
+          wifiSSID: propWifiSsid.trim() || undefined,
+          wifiPassword: propWifiPass.trim() || undefined,
+          externalGuideUrl: propGuideUrl.trim() || undefined,
+          instructions: propInstructions.trim() || undefined,
+        });
+      }
+      setEditingProperty(null);
       setPropModal(false);
     } finally {
       setSavingProp(false);
     }
   };
 
+  const openCreateZoneModal = (propertyIri: string) => {
+    setEditingZone(null);
+    setZonePropertyIri(propertyIri);
+    setZoneName("");
+    setZoneMountType("Comptoir");
+    setZoneModal(true);
+  };
+
+  const openEditZoneModal = (z: ZoneItem) => {
+    setEditingZone(z);
+    setZonePropertyIri(z.property);
+    setZoneName(z.name);
+    setZoneMountType(z.mountType || "Comptoir");
+    setZoneModal(true);
+  };
+
+  const submitZone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!zoneName.trim()) return;
+    setSavingZone(true);
+    try {
+      if (editingZone) {
+        await onUpdateZone(editingZone["@id"], {
+          name: zoneName.trim(),
+          mountType: zoneMountType,
+        });
+      } else {
+        await onCreateZone({
+          name: zoneName.trim(),
+          mountType: zoneMountType,
+          property: zonePropertyIri,
+        });
+      }
+      setEditingZone(null);
+      setZoneModal(false);
+    } finally {
+      setSavingZone(false);
+    }
+  };
+
+  const visibleProperties =
+    selectedAccountFilter === "all"
+      ? properties
+      : properties.filter((p) => p.account === selectedAccountFilter);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Clients & Propriétés</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Clients, Propriétés & Zones NFC
+          </h1>
           <p className="text-sm text-neutral-400">
-            Comptes conciergeries / propriétaires, identifiants Wi-Fi et livrets d&apos;accueil connectés
+            Gérez les comptes clients, les logements (Wi-Fi, livrets d&apos;accueil) et leurs zones de pose NFC
           </p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
               type="button"
-              onClick={() => setAccountModal(true)}
+              onClick={openCreateAccountModal}
               className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
             >
               + Nouveau compte client
@@ -104,10 +262,7 @@ export function ClientsView({
           )}
           <button
             type="button"
-            onClick={() => {
-              setPropAccount(accounts[0]?.["@id"] ?? "/api/accounts/1");
-              setPropModal(true);
-            }}
+            onClick={() => openCreatePropertyModal()}
             className="rounded-lg bg-emerald-500 px-3.5 py-2 text-xs font-semibold text-neutral-950 hover:bg-emerald-400"
           >
             + Nouvelle propriété
@@ -115,70 +270,154 @@ export function ClientsView({
         </div>
       </div>
 
-      {/* Comptes clients */}
+      {/* Comptes clients avec édition / suppression et filtre par compte */}
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Comptes enregistrés ({accounts.length})
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+            Comptes enregistrés ({accounts.length})
+          </h2>
+          {selectedAccountFilter !== "all" && (
+            <button
+              type="button"
+              onClick={() => setSelectedAccountFilter("all")}
+              className="text-xs text-sky-400 hover:underline"
+            >
+              Afficher toutes les propriétés ({properties.length})
+            </button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {accounts.map((acc) => {
             const propCount = properties.filter((p) => p.account === acc["@id"]).length;
+            const isSelected = selectedAccountFilter === acc["@id"];
+
             return (
               <div
                 key={acc["@id"]}
-                className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900/70 p-4"
+                className={`flex flex-col justify-between gap-3 rounded-xl border p-4 transition-colors ${
+                  isSelected
+                    ? "border-sky-500/60 bg-sky-950/20"
+                    : "border-neutral-800 bg-neutral-900/70 hover:border-neutral-700"
+                }`}
               >
-                <div>
-                  <div className="font-semibold text-neutral-100">{acc.name}</div>
-                  <div className="mt-0.5 text-xs text-neutral-400">
-                    {propCount} propriété{propCount > 1 ? "s" : ""} rattachée{propCount > 1 ? "s" : ""}
-                  </div>
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedAccountFilter((prev) =>
+                        prev === acc["@id"] ? "all" : acc["@id"],
+                      )
+                    }
+                    className="text-left"
+                  >
+                    <div className="font-semibold text-neutral-100 hover:text-sky-300">
+                      {acc.name}
+                    </div>
+                    <div className="mt-0.5 text-xs text-neutral-400">
+                      {propCount} propriété{propCount > 1 ? "s" : ""} rattachée
+                      {propCount > 1 ? "s" : ""}
+                    </div>
+                  </button>
+                  <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 font-mono text-xs font-semibold text-sky-300">
+                    {acc.type}
+                  </span>
                 </div>
-                <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 font-mono text-xs font-semibold text-sky-300">
-                  {acc.type}
-                </span>
+
+                <div className="flex items-center justify-between border-t border-neutral-800/80 pt-2.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => openCreatePropertyModal(acc["@id"])}
+                    className="font-medium text-emerald-400 hover:text-emerald-300"
+                  >
+                    + Ajouter propriété
+                  </button>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openEditAccountModal(acc)}
+                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteAccount(acc["@id"])}
+                        className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                      >
+                        Suppr.
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
       </section>
 
-      {/* Propriétés & Guides */}
+      {/* Propriétés, Paramètres Wi-Fi / Guide & Gestion complète des Zones */}
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Propriétés & Paramètres NFC ({properties.length})
-        </h2>
-        {properties.length === 0 ? (
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+            Propriétés & Zones de pose ({visibleProperties.length})
+          </h2>
+          <span className="text-xs text-neutral-500">
+            {zones.length} zone{zones.length > 1 ? "s" : ""} configurée{zones.length > 1 ? "s" : ""} au total
+          </span>
+        </div>
+
+        {visibleProperties.length === 0 ? (
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500">
-            Aucune propriété configurée pour le moment.
+            Aucune propriété configurée pour cette sélection.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {properties.map((prop) => {
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {visibleProperties.map((prop) => {
               const acc = accounts.find((a) => a["@id"] === prop.account);
+              const propZones = zones.filter((z) => z.property === prop["@id"]);
+              const availableTags = nfcTags.filter(
+                (t) => t.status !== "defective" && !t.zone,
+              );
+
               return (
                 <div
                   key={prop["@id"]}
-                  className="flex flex-col justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 p-4"
+                  className="flex flex-col justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900/80 p-5"
                 >
-                  <div>
+                  <div className="flex flex-col gap-3">
+                    {/* En-tête de la propriété */}
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <h3 className="text-base font-bold text-neutral-100">{prop.name}</h3>
                         <span className="text-xs text-neutral-400">
-                          Compte : <strong className="text-neutral-200">{acc?.name ?? prop.account}</strong>
+                          Compte :{" "}
+                          <strong className="text-neutral-200">
+                            {acc?.name ?? prop.account}
+                          </strong>
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteProperty(prop["@id"])}
-                        className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
-                      >
-                        Suppr.
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openEditPropertyModal(prop)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-xs text-neutral-200 hover:bg-neutral-800"
+                        >
+                          Modifier
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteProperty(prop["@id"])}
+                          className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-1 text-xs text-rose-300 hover:bg-rose-900/50"
+                        >
+                          Suppr.
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-neutral-800/80 bg-neutral-950/60 p-2.5 text-xs">
+                    {/* Wi-Fi & Guide */}
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-800/80 bg-neutral-950/60 p-3 text-xs">
                       <div>
                         <span className="text-neutral-500">Wi-Fi SSID :</span>
                         <div className="font-mono font-medium text-neutral-200">
@@ -187,25 +426,156 @@ export function ClientsView({
                       </div>
                       <div>
                         <span className="text-neutral-500">Clé Wi-Fi :</span>
-                        <div className="font-mono font-medium text-neutral-200">
+                        <div className="font-mono font-medium text-emerald-300">
                           {prop.wifiPassword || "—"}
                         </div>
                       </div>
                     </div>
 
                     {prop.instructions && (
-                      <p className="mt-2.5 text-xs text-neutral-300">{prop.instructions}</p>
+                      <p className="rounded-lg border border-neutral-800/50 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-300">
+                        {prop.instructions}
+                      </p>
                     )}
+
                     {prop.externalGuideUrl && (
                       <a
                         href={prop.externalGuideUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-2 inline-block text-xs text-sky-400 underline hover:text-sky-300"
+                        className="inline-flex items-center gap-1 text-xs text-sky-400 underline hover:text-sky-300"
                       >
-                        {prop.externalGuideUrl}
+                        <span>Livret d&apos;accueil : {prop.externalGuideUrl}</span>
+                        <span>↗</span>
                       </a>
                     )}
+
+                    {/* Section Zones de la propriété */}
+                    <div className="mt-1 rounded-xl border border-neutral-800 bg-neutral-950/70 p-3.5">
+                      <div className="mb-2.5 flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+                          Zones & Supports NFC ({propZones.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openCreateZoneModal(prop["@id"])}
+                          className="rounded-md bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30"
+                        >
+                          + Ajouter une zone
+                        </button>
+                      </div>
+
+                      {propZones.length === 0 ? (
+                        <p className="py-2 text-xs text-neutral-500">
+                          Aucune zone créée (ex: Îlot Cuisine, Salon, Entrée…).
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {propZones.map((zone) => {
+                            const zoneTags = nfcTags.filter(
+                              (t) => t.zone === zone["@id"],
+                            );
+                            return (
+                              <div
+                                key={zone["@id"]}
+                                className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900/90 p-2.5 text-xs"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-neutral-100">
+                                      {zone.name}
+                                    </span>
+                                    {zone.mountType && (
+                                      <span className="rounded border border-neutral-700 bg-neutral-800 px-1.5 py-0.2 font-mono text-[10px] text-neutral-300">
+                                        {zone.mountType}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditZoneModal(zone)}
+                                      className="rounded border border-neutral-700 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                                    >
+                                      Modifier
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteZone(zone["@id"])}
+                                      className="rounded border border-rose-900/50 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Puces NFC affectées à cette zone */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-800/70 pt-2">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {zoneTags.length === 0 ? (
+                                      <span className="text-[11px] text-neutral-500">
+                                        Aucune puce NFC associée
+                                      </span>
+                                    ) : (
+                                      zoneTags.map((tg) => (
+                                        <span
+                                          key={tg["@id"]}
+                                          className="inline-flex items-center gap-1 rounded border border-purple-500/40 bg-purple-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-purple-200"
+                                        >
+                                          <a
+                                            href={`/g/${tg.shortUid}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="hover:underline"
+                                          >
+                                            #{tg.shortUid} ↗
+                                          </a>
+                                          {isAdmin && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                onAssignTagToZone(tg["@id"], null)
+                                              }
+                                              title="Détacher de cette zone"
+                                              className="ml-1 text-purple-300 hover:text-white"
+                                            >
+                                              ×
+                                            </button>
+                                          )}
+                                        </span>
+                                      ))
+                                    )}
+                                  </div>
+
+                                  {isAdmin && availableTags.length > 0 && (
+                                    <select
+                                      value=""
+                                      onChange={(e) => {
+                                        if (e.target.value) {
+                                          void onAssignTagToZone(
+                                            e.target.value,
+                                            zone["@id"],
+                                          );
+                                        }
+                                      }}
+                                      className="rounded border border-neutral-700 bg-neutral-950 px-2 py-0.5 text-[11px] text-neutral-300"
+                                    >
+                                      <option value="">+ Affecter un tag NFC…</option>
+                                      {availableTags.map((t) => (
+                                        <option key={t["@id"]} value={t["@id"]}>
+                                          #{t.shortUid} ({t.status})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -214,13 +584,27 @@ export function ClientsView({
         )}
       </section>
 
+      {/* Modale Création / Édition Compte Client */}
       {accountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <form
             onSubmit={submitAccount}
             className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
           >
-            <h2 className="text-base font-bold">Nouveau compte client</h2>
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h2 className="text-base font-bold">
+                {editingAccount
+                  ? `Modifier le compte « ${editingAccount.name} »`
+                  : "Nouveau compte client"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setAccountModal(false)}
+                className="text-sm text-neutral-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Nom du client / conciergerie
               <input
@@ -256,20 +640,38 @@ export function ClientsView({
                 disabled={savingAcc}
                 className="rounded bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-neutral-950"
               >
-                {savingAcc ? "Enregistrement…" : "Créer"}
+                {savingAcc
+                  ? "Enregistrement…"
+                  : editingAccount
+                    ? "Enregistrer"
+                    : "Créer"}
               </button>
             </div>
           </form>
         </div>
       )}
 
+      {/* Modale Création / Édition Propriété */}
       {propModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <form
             onSubmit={submitProperty}
             className="flex w-full max-w-md flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
           >
-            <h2 className="text-base font-bold">Nouvelle propriété</h2>
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h2 className="text-base font-bold">
+                {editingProperty
+                  ? `Modifier « ${editingProperty.name} »`
+                  : "Nouvelle propriété"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setPropModal(false)}
+                className="text-sm text-neutral-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
             {isAdmin && accounts.length > 0 && (
               <label className="flex flex-col gap-1 text-xs text-neutral-300">
                 Compte client
@@ -330,7 +732,7 @@ export function ClientsView({
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Instructions d&apos;arrivée / départ
               <textarea
-                rows={2}
+                rows={3}
                 value={propInstructions}
                 onChange={(e) => setPropInstructions(e.target.value)}
                 className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm"
@@ -349,7 +751,84 @@ export function ClientsView({
                 disabled={savingProp}
                 className="rounded bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-neutral-950"
               >
-                {savingProp ? "Enregistrement…" : "Ajouter"}
+                {savingProp
+                  ? "Enregistrement…"
+                  : editingProperty
+                    ? "Enregistrer"
+                    : "Ajouter"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Modale Création / Édition Zone */}
+      {zoneModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <form
+            onSubmit={submitZone}
+            className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h2 className="text-base font-bold">
+                {editingZone
+                  ? `Modifier la zone « ${editingZone.name} »`
+                  : "Nouvelle zone / emplacement NFC"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setZoneModal(false)}
+                className="text-sm text-neutral-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <label className="flex flex-col gap-1 text-xs text-neutral-300">
+              Nom de la zone dans le logement
+              <input
+                type="text"
+                required
+                value={zoneName}
+                onChange={(e) => setZoneName(e.target.value)}
+                placeholder="ex: Îlot Cuisine, Table Salon, Entrée Skis…"
+                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs text-neutral-300">
+              Type de pose du support
+              <select
+                value={zoneMountType}
+                onChange={(e) => setZoneMountType(e.target.value)}
+                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+              >
+                {MOUNT_TYPES.map((mt) => (
+                  <option key={mt} value={mt}>
+                    {mt}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setZoneModal(false)}
+                className="rounded border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={savingZone}
+                className="rounded bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-neutral-950"
+              >
+                {savingZone
+                  ? "Enregistrement…"
+                  : editingZone
+                    ? "Enregistrer"
+                    : "Ajouter la zone"}
               </button>
             </div>
           </form>

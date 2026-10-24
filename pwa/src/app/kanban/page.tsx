@@ -457,6 +457,29 @@ export default function KanbanPage() {
     if (res.ok) await refreshAllData();
   };
 
+  const updateAccount = async (
+    accountIri: string,
+    payload: { name: string; type: string },
+  ) => {
+    const res = await apiFetch(accountIri, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/merge-patch+json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) await refreshAllData();
+  };
+
+  const deleteAccount = async (accountIri: string) => {
+    if (
+      !window.confirm(
+        "Supprimer ce compte client ainsi que ses propriétés et commandes rattachées ?",
+      )
+    )
+      return;
+    const res = await apiFetch(accountIri, { method: "DELETE" });
+    if (res.ok || res.status === 204) await refreshAllData();
+  };
+
   const createProperty = async (payload: {
     name: string;
     account: string;
@@ -473,10 +496,67 @@ export default function KanbanPage() {
     if (res.ok) await refreshAllData();
   };
 
+  const updateProperty = async (
+    propertyIri: string,
+    payload: {
+      name: string;
+      account: string;
+      wifiSSID?: string | null;
+      wifiPassword?: string | null;
+      externalGuideUrl?: string | null;
+      instructions?: string | null;
+    },
+  ) => {
+    const res = await apiFetch(propertyIri, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/merge-patch+json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) await refreshAllData();
+  };
+
   const deleteProperty = async (propertyIri: string) => {
-    if (!window.confirm("Supprimer cette propriété ?")) return;
+    if (!window.confirm("Supprimer cette propriété et ses zones ?")) return;
     const res = await apiFetch(propertyIri, { method: "DELETE" });
     if (res.ok || res.status === 204) await refreshAllData();
+  };
+
+  const createZone = async (payload: {
+    name: string;
+    mountType: string;
+    property: string;
+  }) => {
+    const res = await apiFetch(`${API_URL}/zones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/ld+json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) await refreshAllData();
+  };
+
+  const updateZone = async (
+    zoneIri: string,
+    payload: { name: string; mountType: string },
+  ) => {
+    const res = await apiFetch(zoneIri, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/merge-patch+json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) await refreshAllData();
+  };
+
+  const deleteZone = async (zoneIri: string) => {
+    if (!window.confirm("Supprimer cette zone ?")) return;
+    const res = await apiFetch(zoneIri, { method: "DELETE" });
+    if (res.ok || res.status === 204) await refreshAllData();
+  };
+
+  const assignTagToZone = async (tagIri: string, zoneIri: string | null) => {
+    await updateNfcTag(tagIri, {
+      zone: zoneIri,
+      status: zoneIri ? "assigned" : "encoded",
+    });
   };
 
   const createNfcTag = async (payload: { shortUid: string; status: NfcTagItem["status"] }) => {
@@ -1126,9 +1206,18 @@ export default function KanbanPage() {
             isAdmin={isAdmin}
             accounts={accounts}
             properties={properties}
+            zones={zones}
+            nfcTags={nfcTags}
             onCreateAccount={createAccount}
+            onUpdateAccount={updateAccount}
+            onDeleteAccount={deleteAccount}
             onCreateProperty={createProperty}
+            onUpdateProperty={updateProperty}
             onDeleteProperty={deleteProperty}
+            onCreateZone={createZone}
+            onUpdateZone={updateZone}
+            onDeleteZone={deleteZone}
+            onAssignTagToZone={assignTagToZone}
           />
         )}
 
