@@ -810,14 +810,14 @@ export default function KanbanPage() {
         {/* VUE 1 : COMMANDES & KANBAN DE PRODUCTION */}
         {activeTab === "orders" && (
           <div className="flex flex-col gap-5">
-            {/* En-tête de la vue Commandes */}
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+            {/* En-tête épuré de la vue Commandes */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Commandes & Production Atelier
+                <h1 className="text-xl font-bold tracking-tight text-white">
+                  Commandes & Production
                 </h1>
-                <p className="text-sm text-neutral-400">
-                  Flux Kanban unifié : commandes clients (gris) & réapprovisionnements stock atelier (orange)
+                <p className="text-xs text-neutral-400">
+                  Suivi de fabrication des supports clients et lots de réapprovisionnement atelier
                 </p>
               </div>
 
@@ -826,73 +826,57 @@ export default function KanbanPage() {
                   <button
                     type="button"
                     onClick={() => openCreateModal(true)}
-                    className="rounded-lg border border-orange-500/50 bg-orange-500/15 px-3 py-2 text-xs font-semibold text-orange-300 hover:bg-orange-500/25"
+                    className="rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-300 transition-colors hover:bg-orange-500/20"
                   >
-                    + Fiche Réappro Stock
+                    + Réappro stock
                   </button>
                   <button
                     type="button"
                     onClick={() => openCreateModal(false)}
-                    className="rounded-lg bg-emerald-500 px-3.5 py-2 text-xs font-semibold text-neutral-950 hover:bg-emerald-400"
+                    className="rounded-lg bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-950 transition-colors hover:bg-neutral-200"
                   >
-                    + Nouvelle commande client
+                    + Nouvelle commande
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Bandeau compact d'état des stocks avec raccourci vers l'onglet Stocks */}
-            {isAdmin && stockItems.length > 0 && (
-              <div
-                className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-xs ${
-                  lowStockCount > 0
-                    ? "border-orange-500/50 bg-orange-950/25 text-orange-200"
-                    : "border-neutral-800 bg-neutral-900/50 text-neutral-300"
-                }`}
-              >
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-semibold uppercase tracking-wider text-neutral-400">
-                    État Stocks :
+            {/* Alerte stock contextuelle (affichée uniquement lorsqu'un seuil est franchi) */}
+            {isAdmin && lowStockCount > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-500/40 bg-orange-950/20 px-4 py-2.5 text-xs text-orange-200">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-orange-300">
+                    Stock sous seuil :
                   </span>
-                  {stockItems.map((si) => {
-                    const isLow = si.quantity <= si.alertThreshold;
-                    return (
-                      <span
-                        key={si["@id"]}
-                        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono ${
-                          isLow
-                            ? "border-orange-500/50 bg-orange-500/20 text-orange-300 font-bold"
-                            : "border-neutral-800 bg-neutral-900 text-neutral-300"
-                        }`}
-                      >
-                        <span>{si.name}:</span>
-                        <span>
-                          {si.quantity} {si.unit}
-                        </span>
-                      </span>
-                    );
-                  })}
+                  {lowStockItems.map((si) => (
+                    <span
+                      key={si["@id"]}
+                      className="rounded border border-orange-500/40 bg-orange-500/15 px-2 py-0.5 font-mono text-[11px]"
+                    >
+                      {si.name} ({si.quantity} {si.unit})
+                    </span>
+                  ))}
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab("stocks")}
-                  className="font-semibold text-sky-400 hover:text-sky-300"
+                  className="font-medium text-orange-300 underline hover:text-white"
                 >
-                  Gérer les stocks & seuils →
+                  Voir les stocks →
                 </button>
               </div>
             )}
 
-            {/* Barre de filtres (Toutes / Clients / Stock Atelier) + Recherche */}
+            {/* Barre de filtres + Recherche */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900/70 p-1 text-xs">
+              <div className="flex flex-wrap items-center gap-1 rounded-xl border border-neutral-800/80 bg-neutral-900/50 p-1 text-xs">
                 <button
                   type="button"
                   onClick={() => setOrderFilter("all")}
                   className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
                     orderFilter === "all"
-                      ? "bg-neutral-800 text-white shadow-sm"
+                      ? "bg-neutral-800 text-white"
                       : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
@@ -903,33 +887,33 @@ export default function KanbanPage() {
                   onClick={() => setOrderFilter("client")}
                   className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
                     orderFilter === "client"
-                      ? "bg-neutral-800 text-white shadow-sm"
+                      ? "bg-neutral-800 text-white"
                       : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
-                  Commandes Clients ({clientOrdersCount})
+                  Clients ({clientOrdersCount})
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderFilter("stock")}
                   className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-colors ${
                     orderFilter === "stock"
-                      ? "border border-orange-500/40 bg-orange-500/20 text-orange-300"
-                      : "text-orange-300/80 hover:text-orange-300"
+                      ? "bg-orange-500/20 text-orange-300"
+                      : "text-neutral-400 hover:text-orange-300"
                   }`}
                 >
-                  <span className="h-2 w-2 rounded-full bg-orange-400" />
-                  Réappro Stock Atelier ({stockOrdersCount})
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                  Stock ({stockOrdersCount})
                 </button>
               </div>
 
-              <div className="relative w-full sm:w-72">
+              <div className="relative w-full sm:w-64">
                 <input
                   type="search"
                   placeholder="Rechercher CMD #, client, support…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3.5 py-2 text-xs text-neutral-100 placeholder-neutral-500 focus:border-sky-500 focus:outline-none"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900/70 px-3.5 py-1.5 text-xs text-neutral-100 placeholder-neutral-500 focus:border-neutral-600 focus:outline-none"
                 />
               </div>
             </div>
@@ -942,20 +926,20 @@ export default function KanbanPage() {
                 return (
                   <div
                     key={col.id}
-                    className="flex flex-col rounded-xl border border-neutral-800 bg-neutral-900/50 p-4"
+                    className="flex flex-col rounded-2xl border border-neutral-800/80 bg-neutral-900/35 p-3.5"
                   >
-                    <div className="mb-4 flex items-center justify-between">
-                      <span className={`rounded-md border px-2.5 py-0.5 text-xs font-semibold ${col.color}`}>
+                    <div className="mb-3 flex items-center justify-between px-0.5">
+                      <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${col.color}`}>
                         {col.title}
                       </span>
-                      <span className="rounded-full bg-neutral-800 px-2 py-0.5 font-mono text-xs text-neutral-400">
+                      <span className="font-mono text-xs text-neutral-500">
                         {colOrders.length}
                       </span>
                     </div>
 
-                    <div className="flex flex-1 flex-col gap-3">
+                    <div className="flex flex-1 flex-col gap-2.5">
                       {colOrders.length === 0 ? (
-                        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-neutral-800/70 py-8 text-xs text-neutral-600">
+                        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-neutral-800/60 py-8 text-xs text-neutral-600">
                           Aucune fiche
                         </div>
                       ) : (
@@ -974,69 +958,50 @@ export default function KanbanPage() {
                           return (
                             <div
                               key={order["@id"]}
-                              className={`flex flex-col gap-2.5 rounded-xl border p-3.5 shadow-sm transition-colors ${
+                              className={`flex flex-col gap-2.5 rounded-xl border p-3.5 transition-colors ${
                                 isStock
-                                  ? "border-orange-500/70 bg-gradient-to-b from-orange-950/45 via-orange-950/20 to-neutral-900 hover:border-orange-400"
-                                  : "border-neutral-800 bg-neutral-900 hover:border-neutral-700"
+                                  ? "border-orange-500/50 bg-orange-950/15 hover:border-orange-400/70"
+                                  : "border-neutral-800/90 bg-neutral-900/90 hover:border-neutral-700"
                               }`}
                             >
-                              {/* En-tête de la fiche */}
+                              {/* Ligne 1 : Identifiant, Client & Actions rapides */}
                               <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
                                     <span
-                                      className={`font-mono text-sm font-bold ${
-                                        isStock ? "text-orange-300" : "text-neutral-100"
+                                      className={`font-mono text-xs font-bold ${
+                                        isStock ? "text-orange-300" : "text-white"
                                       }`}
                                     >
-                                      CMD #{order.id}
+                                      #{order.id}
                                     </span>
-                                    {isStock ? (
-                                      <span className="rounded border border-orange-400/60 bg-orange-500/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-200">
-                                        Réappro Stock
-                                      </span>
-                                    ) : (
-                                      order.stockDeducted && (
-                                        <span
-                                          title="Les composants (patin TPU, socle ciment, plaque bois) ont été déduits du stock"
-                                          className="rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.2 text-[10px] text-sky-300"
-                                        >
-                                          Stock déduit
-                                        </span>
-                                      )
-                                    )}
-                                    {isStock && order.stockCredited && (
-                                      <span className="rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.2 text-[10px] text-emerald-300">
-                                        Stock crédité
-                                      </span>
-                                    )}
+                                    <span className="truncate text-xs font-semibold text-neutral-200">
+                                      {isStock
+                                        ? order.targetStockItem?.name ?? "Réappro Stock"
+                                        : accountObj?.name ?? "Client"}
+                                    </span>
                                   </div>
-                                  <div className="mt-0.5 flex items-center gap-2">
-                                    <span className="text-[11px] text-neutral-400">
-                                      Créée le {new Date(order.createdAt).toLocaleDateString("fr-FR")}
+                                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-neutral-500">
+                                    <span>
+                                      {new Date(order.createdAt).toLocaleDateString("fr-FR")}
                                     </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setPrintingOrderId(order.id)}
-                                      title="Ouvrir le bon de fabrication avec code-barres douchette"
-                                      className="inline-flex items-center gap-1 rounded border border-neutral-700 bg-neutral-950 px-1.5 py-0.2 font-mono text-[10px] text-neutral-300 hover:border-sky-500/50 hover:text-sky-300"
-                                    >
-                                      <span>║▌║</span>
-                                      <span>{formatOrderBarcode(order.id)}</span>
-                                    </button>
+                                    <span>•</span>
+                                    <span>
+                                      {totalSupports} {isStock ? "pcs" : `support${totalSupports > 1 ? "s" : ""}`}
+                                    </span>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-1">
+                                <div className="flex shrink-0 items-center gap-1">
                                   {isAdmin && !isStock && (
                                     <button
                                       type="button"
                                       onClick={() => setEncodingOrderId(order.id)}
-                                      title="Ouvrir le poste d'encodage NFC pour cette commande"
-                                      className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${
+                                      title="Poste d'encodage NFC"
+                                      className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
                                         col.id === "quality_check"
-                                          ? "border-purple-400/70 bg-purple-500/25 text-purple-200 hover:bg-purple-500/35"
-                                          : "border-purple-800/60 bg-purple-950/35 text-purple-300 hover:bg-purple-900/50"
+                                          ? "border-purple-400/60 bg-purple-500/20 text-purple-200"
+                                          : "border-neutral-700 bg-neutral-800/80 text-neutral-300 hover:text-white"
                                       }`}
                                     >
                                       NFC
@@ -1045,8 +1010,8 @@ export default function KanbanPage() {
                                   <button
                                     type="button"
                                     onClick={() => setPrintingOrderId(order.id)}
-                                    title="Imprimer le bon de fabrication avec code-barres"
-                                    className="rounded border border-sky-800/70 bg-sky-950/40 px-2 py-0.5 text-[11px] font-medium text-sky-300 hover:bg-sky-900/50"
+                                    title={`Bon de fabrication (${formatOrderBarcode(order.id)})`}
+                                    className="rounded-md border border-neutral-700 bg-neutral-800/80 px-2 py-0.5 text-[10px] font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white"
                                   >
                                     Bon
                                   </button>
@@ -1055,122 +1020,68 @@ export default function KanbanPage() {
                                       <button
                                         type="button"
                                         onClick={() => openEditModal(order)}
-                                        className="rounded border border-neutral-700 bg-neutral-900/80 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                                        title="Modifier la fiche"
+                                        className="rounded-md border border-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
                                       >
-                                        Modifier
+                                        Éditer
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => deleteOrder(order)}
                                         title="Supprimer la fiche"
-                                        className="rounded border border-rose-900/60 bg-rose-950/40 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                                        className="rounded-md px-1.5 py-0.5 text-xs text-neutral-500 hover:bg-rose-950/40 hover:text-rose-300"
                                       >
-                                        Suppr.
+                                        ×
                                       </button>
                                     </>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Origine : Client OU Production Stock Interne */}
-                              <div
-                                className={`rounded-md border px-2.5 py-1.5 text-xs ${
-                                  isStock
-                                    ? "border-orange-500/40 bg-orange-950/40 text-orange-200"
-                                    : "border-neutral-800/90 bg-neutral-950/60 text-neutral-200"
-                                }`}
-                              >
-                                {isStock ? (
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-semibold">
-                                      Atelier VisuAlpes —{" "}
-                                      {order.targetStockItem?.name ?? "Composant stock"}
-                                    </span>
-                                    <span className="rounded bg-orange-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-orange-300">
-                                      INTERNE
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-medium">
-                                      {accountObj ? accountObj.name : "Client rattaché"}
-                                    </span>
-                                    {accountObj?.type && (
-                                      <span className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
-                                        {accountObj.type}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Détail complet de la commande */}
-                              <div
-                                className={`flex flex-col gap-1 rounded-md border p-2 text-xs ${
-                                  isStock
-                                    ? "border-orange-500/30 bg-neutral-950/60"
-                                    : "border-neutral-800/70 bg-neutral-950/40"
-                                }`}
-                              >
-                                <div className="mb-0.5 flex items-center justify-between text-[11px] font-medium text-neutral-400">
-                                  <span>{isStock ? "Lot à fabriquer" : "Détail des supports"}</span>
-                                  <span>Total : {totalSupports} pcs</span>
-                                </div>
-                                {items.length > 0 ? (
-                                  <ul className="flex flex-col gap-1.5">
-                                    {items.map((item, idx) => {
-                                      const itemTags = nfcTags.filter(
-                                        (t) =>
-                                          item["@id"] &&
-                                          t.orderItem === item["@id"] &&
-                                          t.status !== "defective",
-                                      );
-                                      return (
-                                        <li
-                                          key={item["@id"] ?? `${order.id}-item-${idx}`}
-                                          className="flex flex-col gap-1"
-                                        >
-                                          <div className="flex items-center justify-between gap-2 text-neutral-200">
-                                            <span className="truncate">{item.productName}</span>
-                                            <span
-                                              className={`shrink-0 rounded px-1.5 py-0.2 font-mono text-[11px] font-semibold ${
-                                                isStock
-                                                  ? "bg-orange-500/25 text-orange-200"
-                                                  : "bg-neutral-800 text-neutral-200"
-                                              }`}
-                                            >
-                                              × {item.quantity}
-                                            </span>
+                              {/* Ligne 2 : Détail des articles & puces NFC rattachées */}
+                              {items.length > 0 && (
+                                <ul className="flex flex-col gap-1.5 rounded-lg border border-neutral-800/70 bg-neutral-950/50 px-2.5 py-2 text-xs">
+                                  {items.map((item, idx) => {
+                                    const itemTags = nfcTags.filter(
+                                      (t) =>
+                                        item["@id"] &&
+                                        t.orderItem === item["@id"] &&
+                                        t.status !== "defective",
+                                    );
+                                    return (
+                                      <li
+                                        key={item["@id"] ?? `${order.id}-item-${idx}`}
+                                        className="flex flex-col gap-1"
+                                      >
+                                        <div className="flex items-center justify-between gap-2 text-neutral-300">
+                                          <span className="truncate">{item.productName}</span>
+                                          <span className="shrink-0 font-mono text-[11px] font-semibold text-neutral-400">
+                                            ×{item.quantity}
+                                          </span>
+                                        </div>
+                                        {!isStock && itemTags.length > 0 && (
+                                          <div className="flex flex-wrap items-center gap-1">
+                                            {itemTags.map((tg) => (
+                                              <a
+                                                key={tg["@id"]}
+                                                href={`/g/${tg.shortUid}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="rounded bg-purple-500/15 px-1.5 py-0.2 font-mono text-[10px] font-medium text-purple-300 hover:bg-purple-500/25"
+                                              >
+                                                #{tg.shortUid} ↗
+                                              </a>
+                                            ))}
                                           </div>
-                                          {!isStock && itemTags.length > 0 && (
-                                            <div className="flex flex-wrap items-center gap-1">
-                                              {itemTags.map((tg) => (
-                                                <a
-                                                  key={tg["@id"]}
-                                                  href={`/g/${tg.shortUid}`}
-                                                  target="_blank"
-                                                  rel="noreferrer"
-                                                  title="Ouvrir le guide public voyageur de cette puce NFC"
-                                                  className="rounded border border-purple-500/40 bg-purple-500/15 px-1.5 py-0.2 font-mono text-[10px] font-semibold text-purple-300 hover:bg-purple-500/30"
-                                                >
-                                                  NFC #{tg.shortUid} ↗
-                                                </a>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                ) : (
-                                  <p className="text-[11px] italic text-neutral-500">
-                                    Aucune ligne d&apos;article détaillée (1 kit par défaut)
-                                  </p>
-                                )}
-                              </div>
+                                        )}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
 
-                              {/* Navigation statuts */}
-                              <div className="mt-1 flex gap-1 border-t border-neutral-800/80 pt-2">
+                              {/* Ligne 3 : Avancement d'étape */}
+                              <div className="flex gap-1.5 pt-0.5">
                                 {col.id !== "pending" && (
                                   <button
                                     type="button"
@@ -1179,9 +1090,9 @@ export default function KanbanPage() {
                                         COLUMNS[COLUMNS.findIndex((c) => c.id === col.id) - 1].id;
                                       void updateStatus(order["@id"], prevStatus);
                                     }}
-                                    className="flex-1 rounded bg-neutral-800 py-1 text-[11px] text-neutral-400 hover:bg-neutral-700"
+                                    className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
                                   >
-                                    ← Reculer
+                                    ←
                                   </button>
                                 )}
                                 {col.id !== "completed" && (
@@ -1192,10 +1103,10 @@ export default function KanbanPage() {
                                         COLUMNS[COLUMNS.findIndex((c) => c.id === col.id) + 1].id;
                                       void updateStatus(order["@id"], nextStatus);
                                     }}
-                                    className={`flex-1 rounded py-1 text-[11px] font-semibold ${
+                                    className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition-colors ${
                                       isStock
                                         ? "bg-orange-400 text-neutral-950 hover:bg-orange-300"
-                                        : "bg-neutral-100 text-neutral-900 hover:bg-white"
+                                        : "bg-neutral-100 text-neutral-950 hover:bg-white"
                                     }`}
                                   >
                                     Avancer →

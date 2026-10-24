@@ -189,7 +189,6 @@ export function ClientsView({
     setPropName(prop.name);
     setPropAccount(prop.account);
     setPropWifiSsid(prop.wifiSSID ?? "");
-    // Le mot de passe Wi-Fi existant n'est jamais pré-rempli en clair : laissé vide = conservé intact
     setPropWifiPass("");
     setPropWifiAccessCode("");
     setClearAccessCode(false);
@@ -200,12 +199,13 @@ export function ClientsView({
   };
 
   const handleToggleRevealWifi = async (propId: number) => {
-    if (revealedWifi[propId]) {
+    if (revealedWifi[propId]?.wifiPassword) {
       setRevealedWifi((prev) => {
         const next = { ...prev };
         delete next[propId];
         return next;
       });
+      setQrOpenPropIds((prev) => ({ ...prev, [propId]: false }));
       return;
     }
 
@@ -316,6 +316,7 @@ export function ClientsView({
         });
       }
       setEditingZone(null);
+      setZoneName("");
       setZoneModal(false);
     } finally {
       setSavingZone(false);
@@ -327,432 +328,375 @@ export function ClientsView({
       ? properties
       : properties.filter((p) => p.account === selectedAccountFilter);
 
+  const selectedAccountObj =
+    selectedAccountFilter !== "all"
+      ? accounts.find((a) => a["@id"] === selectedAccountFilter) ?? null
+      : null;
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+    <div className="flex flex-col gap-5">
+      {/* En-tête épuré */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Clients, Propriétés & Zones NFC
+          <h1 className="text-xl font-bold tracking-tight text-white">
+            Clients & Logements
           </h1>
-          <p className="text-sm text-neutral-400">
-            Gérez les comptes clients, les logements (Wi-Fi, livrets d&apos;accueil) et leurs zones de pose NFC
+          <p className="text-xs text-neutral-400">
+            Comptes clients, identifiants Wi-Fi chiffrés et zones d&apos;emplacement NFC
           </p>
         </div>
+
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
               type="button"
               onClick={openCreateAccountModal}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
+              className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
             >
-              + Nouveau compte client
+              + Compte client
             </button>
           )}
           <button
             type="button"
             onClick={() => openCreatePropertyModal()}
-            className="rounded-lg bg-emerald-500 px-3.5 py-2 text-xs font-semibold text-neutral-950 hover:bg-emerald-400"
+            className="rounded-lg bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-950 hover:bg-neutral-200"
           >
-            + Nouvelle propriété
+            + Nouveau logement
           </button>
         </div>
       </div>
 
-      {/* Comptes clients avec édition / suppression et filtre par compte */}
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-            Comptes enregistrés ({accounts.length})
-          </h2>
-          {selectedAccountFilter !== "all" && (
+      {/* Barre unifiée de sélection de compte client */}
+      {accounts.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-2">
+          <div className="flex flex-wrap items-center gap-1 text-xs">
             <button
               type="button"
               onClick={() => setSelectedAccountFilter("all")}
-              className="text-xs text-sky-400 hover:underline"
+              className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                selectedAccountFilter === "all"
+                  ? "bg-neutral-800 text-white"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
             >
-              Afficher toutes les propriétés ({properties.length})
+              Tous les comptes ({properties.length})
             </button>
+            {accounts.map((acc) => {
+              const count = properties.filter((p) => p.account === acc["@id"]).length;
+              const isSelected = selectedAccountFilter === acc["@id"];
+              return (
+                <button
+                  key={acc["@id"]}
+                  type="button"
+                  onClick={() => setSelectedAccountFilter(acc["@id"])}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                    isSelected
+                      ? "bg-neutral-800 text-white"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  <span>{acc.name}</span>
+                  <span className="font-mono text-[10px] text-neutral-500">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {isAdmin && selectedAccountObj && (
+            <div className="flex items-center gap-1.5 pr-1 text-xs">
+              <span className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
+                {selectedAccountObj.type}
+              </span>
+              <button
+                type="button"
+                onClick={() => openEditAccountModal(selectedAccountObj)}
+                className="rounded-md border border-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-800"
+              >
+                Renommer compte
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDeleteAccount(selectedAccountObj["@id"])}
+                className="rounded-md px-2 py-1 text-[11px] text-neutral-500 hover:bg-rose-950/40 hover:text-rose-300"
+              >
+                Supprimer
+              </button>
+            </div>
           )}
         </div>
+      )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {accounts.map((acc) => {
-            const propCount = properties.filter((p) => p.account === acc["@id"]).length;
-            const isSelected = selectedAccountFilter === acc["@id"];
+      {/* Grille des logements / propriétés */}
+      {visibleProperties.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-neutral-800/80 py-12 text-center text-xs text-neutral-500">
+          Aucun logement configuré pour cette sélection.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {visibleProperties.map((prop) => {
+            const acc = accounts.find((a) => a["@id"] === prop.account);
+            const propZones = zones.filter((z) => z.property === prop["@id"]);
+            const availableTags = nfcTags.filter(
+              (t) => t.status !== "defective" && !t.zone,
+            );
 
             return (
               <div
-                key={acc["@id"]}
-                className={`flex flex-col justify-between gap-3 rounded-xl border p-4 transition-colors ${
-                  isSelected
-                    ? "border-sky-500/60 bg-sky-950/20"
-                    : "border-neutral-800 bg-neutral-900/70 hover:border-neutral-700"
-                }`}
+                key={prop["@id"]}
+                className="flex flex-col justify-between gap-4 rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-5"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedAccountFilter((prev) =>
-                        prev === acc["@id"] ? "all" : acc["@id"],
-                      )
-                    }
-                    className="text-left"
-                  >
-                    <div className="font-semibold text-neutral-100 hover:text-sky-300">
-                      {acc.name}
+                <div className="flex flex-col gap-3.5">
+                  {/* En-tête du logement */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-bold text-white">{prop.name}</h3>
+                      <span className="text-xs text-neutral-400">
+                        {acc?.name ?? prop.account}
+                      </span>
                     </div>
-                    <div className="mt-0.5 text-xs text-neutral-400">
-                      {propCount} propriété{propCount > 1 ? "s" : ""} rattachée
-                      {propCount > 1 ? "s" : ""}
-                    </div>
-                  </button>
-                  <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 font-mono text-xs font-semibold text-sky-300">
-                    {acc.type}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-neutral-800/80 pt-2.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => openCreatePropertyModal(acc["@id"])}
-                    className="font-medium text-emerald-400 hover:text-emerald-300"
-                  >
-                    + Ajouter propriété
-                  </button>
-                  {isAdmin && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => openEditAccountModal(acc)}
-                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                        onClick={() => openEditPropertyModal(prop)}
+                        className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
                       >
                         Modifier
                       </button>
                       <button
                         type="button"
-                        onClick={() => onDeleteAccount(acc["@id"])}
-                        className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                        onClick={() => void onDeleteProperty(prop["@id"])}
+                        title="Supprimer ce logement"
+                        className="rounded-lg px-2 py-1 text-xs text-neutral-500 hover:bg-rose-950/40 hover:text-rose-300"
                       >
-                        Suppr.
+                        ×
                       </button>
                     </div>
+                  </div>
+
+                  {/* Bloc Wi-Fi compact & sécurisé */}
+                  <div className="flex flex-col gap-2.5 rounded-xl border border-neutral-800/80 bg-neutral-950/60 p-3.5 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-neutral-400">Wi-Fi :</span>
+                        <span className="font-mono font-semibold text-white">
+                          {revealedWifi[prop.id]?.wifiSSID ??
+                            prop.wifiSSID ??
+                            "Non configuré"}
+                        </span>
+                        {prop.wifiProtectedByCode && (
+                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-300">
+                            PIN actif
+                          </span>
+                        )}
+                      </div>
+
+                      {!prop.wifiConfigured ? (
+                        <span className="text-[11px] text-neutral-500">Aucun mot de passe</span>
+                      ) : prop.canManageWifi === false ? (
+                        <span className="font-mono text-[11px] text-neutral-500">
+                          Protégé client
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-emerald-300">
+                            {revealedWifi[prop.id]?.wifiPassword ?? "••••••••"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleRevealWifi(prop.id)}
+                            className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                          >
+                            {revealedWifi[prop.id]?.wifiPassword ? "Masquer" : "Afficher"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleCopyWifiPassword(prop.id)}
+                            className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                          >
+                            {copiedPropId === prop.id ? "✓ Copié" : "Copier"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleWifiQr(prop.id)}
+                            className={`rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                              qrOpenPropIds[prop.id]
+                                ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"
+                                : "border-neutral-800 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                            }`}
+                          >
+                            QR Code
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {qrOpenPropIds[prop.id] && revealedWifi[prop.id]?.wifiQrPayload && (
+                      <div className="flex flex-col items-center gap-2 border-t border-neutral-800/80 pt-3">
+                        <WifiQrCodeSvg
+                          value={revealedWifi[prop.id]!.wifiQrPayload!}
+                          size={148}
+                        />
+                        <span className="text-[11px] text-neutral-400">
+                          Connexion directe au réseau{" "}
+                          <strong className="font-mono text-neutral-200">
+                            {revealedWifi[prop.id]?.wifiSSID ?? prop.wifiSSID}
+                          </strong>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Instructions & lien livret sur une ligne discrète */}
+                  {(prop.instructions || prop.externalGuideUrl) && (
+                    <div className="flex flex-col gap-1.5 text-xs text-neutral-400">
+                      {prop.instructions && (
+                        <p className="line-clamp-2 text-neutral-300">{prop.instructions}</p>
+                      )}
+                      {prop.externalGuideUrl && (
+                        <a
+                          href={prop.externalGuideUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-sky-400 hover:underline"
+                        >
+                          <span>Livret d&apos;accueil externe</span>
+                          <span>↗</span>
+                        </a>
+                      )}
+                    </div>
                   )}
+
+                  {/* Section Zones épurée */}
+                  <div className="flex flex-col gap-2 border-t border-neutral-800/70 pt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-neutral-400">
+                        Zones de pose ({propZones.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openCreateZoneModal(prop["@id"])}
+                        className="text-xs font-medium text-emerald-400 hover:text-emerald-300"
+                      >
+                        + Ajouter une zone
+                      </button>
+                    </div>
+
+                    {propZones.length === 0 ? (
+                      <p className="text-xs text-neutral-600">
+                        Aucune zone définie pour ce logement.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {propZones.map((zone) => {
+                          const zoneTags = nfcTags.filter(
+                            (t) => t.zone === zone["@id"],
+                          );
+                          return (
+                            <div
+                              key={zone["@id"]}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-800/70 bg-neutral-950/50 px-3 py-2 text-xs"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-neutral-200">
+                                  {zone.name}
+                                </span>
+                                {zone.mountType && (
+                                  <span className="text-[11px] text-neutral-500">
+                                    • {zone.mountType}
+                                  </span>
+                                )}
+                                {zoneTags.map((tg) => (
+                                  <span
+                                    key={tg["@id"]}
+                                    className="inline-flex items-center gap-1 rounded bg-purple-500/15 px-1.5 py-0.5 font-mono text-[10px] font-medium text-purple-300"
+                                  >
+                                    <a
+                                      href={`/g/${tg.shortUid}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="hover:underline"
+                                    >
+                                      #{tg.shortUid} ↗
+                                    </a>
+                                    {isAdmin && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void onAssignTagToZone(tg["@id"], null)
+                                        }
+                                        title="Détacher cette puce"
+                                        className="ml-0.5 text-purple-300 hover:text-white"
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {isAdmin && availableTags.length > 0 && (
+                                  <select
+                                    value=""
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        void onAssignTagToZone(
+                                          e.target.value,
+                                          zone["@id"],
+                                        );
+                                      }
+                                    }}
+                                    className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-300"
+                                  >
+                                    <option value="">+ Tag NFC…</option>
+                                    {availableTags.map((t) => (
+                                      <option key={t["@id"]} value={t["@id"]}>
+                                        #{t.shortUid}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => openEditZoneModal(zone)}
+                                  className="rounded-md px-1.5 py-0.5 text-[11px] text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                                >
+                                  Éditer
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void onDeleteZone(zone["@id"])}
+                                  className="rounded-md px-1.5 py-0.5 text-xs text-neutral-500 hover:bg-rose-950/40 hover:text-rose-300"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
-      </section>
-
-      {/* Propriétés, Paramètres Wi-Fi / Guide & Gestion complète des Zones */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-            Propriétés & Zones de pose ({visibleProperties.length})
-          </h2>
-          <span className="text-xs text-neutral-500">
-            {zones.length} zone{zones.length > 1 ? "s" : ""} configurée{zones.length > 1 ? "s" : ""} au total
-          </span>
-        </div>
-
-        {visibleProperties.length === 0 ? (
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500">
-            Aucune propriété configurée pour cette sélection.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {visibleProperties.map((prop) => {
-              const acc = accounts.find((a) => a["@id"] === prop.account);
-              const propZones = zones.filter((z) => z.property === prop["@id"]);
-              const availableTags = nfcTags.filter(
-                (t) => t.status !== "defective" && !t.zone,
-              );
-
-              return (
-                <div
-                  key={prop["@id"]}
-                  className="flex flex-col justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900/80 p-5"
-                >
-                  <div className="flex flex-col gap-3">
-                    {/* En-tête de la propriété */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="text-base font-bold text-neutral-100">{prop.name}</h3>
-                        <span className="text-xs text-neutral-400">
-                          Compte :{" "}
-                          <strong className="text-neutral-200">
-                            {acc?.name ?? prop.account}
-                          </strong>
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openEditPropertyModal(prop)}
-                          className="rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-xs text-neutral-200 hover:bg-neutral-800"
-                        >
-                          Modifier
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteProperty(prop["@id"])}
-                          className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-1 text-xs text-rose-300 hover:bg-rose-900/50"
-                        >
-                          Suppr.
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Wi-Fi sécurisé (chiffré AES-256-GCM en base & masqué par défaut) */}
-                    <div className="flex flex-col gap-2 rounded-lg border border-neutral-800/80 bg-neutral-950/60 p-3 text-xs">
-                      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-neutral-800/70 pb-2">
-                        <span className="font-semibold text-neutral-300">
-                          Accès Wi-Fi du logement
-                        </span>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 font-mono text-[10px] text-emerald-300">
-                            AES-256-GCM
-                          </span>
-                          {prop.wifiProtectedByCode && (
-                            <span className="rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.2 font-mono text-[10px] text-amber-300">
-                              PIN Voyageur actif
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <div>
-                          <span className="text-neutral-500">Wi-Fi SSID :</span>
-                          <div className="font-mono font-medium text-neutral-200">
-                            {revealedWifi[prop.id]?.wifiSSID ??
-                              prop.wifiSSID ??
-                              "Non renseigné"}
-                          </div>
-                        </div>
-
-                        <div>
-                          <span className="text-neutral-500">Clé Wi-Fi :</span>
-                          {!prop.wifiConfigured ? (
-                            <div className="font-mono text-neutral-500">Non configurée</div>
-                          ) : prop.canManageWifi === false ? (
-                            <div
-                              title="Seul le client propriétaire du compte peut déchiffrer son mot de passe Wi-Fi"
-                              className="font-mono text-[11px] text-amber-300/90"
-                            >
-                              Confidentiel Client (masqué atelier)
-                            </div>
-                          ) : (
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono font-bold text-emerald-300">
-                                {revealedWifi[prop.id]?.wifiPassword ?? "••••••••••••"}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleRevealWifi(prop.id)}
-                                className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-800"
-                              >
-                                {revealedWifi[prop.id] ? "Masquer" : "Afficher"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyWifiPassword(prop.id)}
-                                className="rounded border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300 hover:bg-sky-500/25"
-                              >
-                                {copiedPropId === prop.id ? "✓ Copié" : "Copier"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleToggleWifiQr(prop.id)}
-                                className="rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/25"
-                              >
-                                {qrOpenPropIds[prop.id] ? "Fermer QR" : "QR Code"}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {qrOpenPropIds[prop.id] && revealedWifi[prop.id]?.wifiQrPayload && (
-                        <div className="mt-2 flex flex-col items-center gap-2 rounded-xl border border-emerald-500/30 bg-neutral-900/90 p-3">
-                          <WifiQrCodeSvg
-                            value={revealedWifi[prop.id]!.wifiQrPayload!}
-                            size={156}
-                          />
-                          <div className="text-center text-[11px] text-neutral-300">
-                            Scannez avec l&apos;appareil photo pour rejoindre{" "}
-                            <strong className="font-mono text-white">
-                              {revealedWifi[prop.id]?.wifiSSID ?? prop.wifiSSID}
-                            </strong>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {prop.instructions && (
-                      <p className="rounded-lg border border-neutral-800/50 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-300">
-                        {prop.instructions}
-                      </p>
-                    )}
-
-                    {prop.externalGuideUrl && (
-                      <a
-                        href={prop.externalGuideUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-sky-400 underline hover:text-sky-300"
-                      >
-                        <span>Livret d&apos;accueil : {prop.externalGuideUrl}</span>
-                        <span>↗</span>
-                      </a>
-                    )}
-
-                    {/* Section Zones de la propriété */}
-                    <div className="mt-1 rounded-xl border border-neutral-800 bg-neutral-950/70 p-3.5">
-                      <div className="mb-2.5 flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-neutral-300">
-                          Zones & Supports NFC ({propZones.length})
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => openCreateZoneModal(prop["@id"])}
-                          className="rounded-md bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30"
-                        >
-                          + Ajouter une zone
-                        </button>
-                      </div>
-
-                      {propZones.length === 0 ? (
-                        <p className="py-2 text-xs text-neutral-500">
-                          Aucune zone créée (ex: Îlot Cuisine, Salon, Entrée…).
-                        </p>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {propZones.map((zone) => {
-                            const zoneTags = nfcTags.filter(
-                              (t) => t.zone === zone["@id"],
-                            );
-                            return (
-                              <div
-                                key={zone["@id"]}
-                                className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900/90 p-2.5 text-xs"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-neutral-100">
-                                      {zone.name}
-                                    </span>
-                                    {zone.mountType && (
-                                      <span className="rounded border border-neutral-700 bg-neutral-800 px-1.5 py-0.2 font-mono text-[10px] text-neutral-300">
-                                        {zone.mountType}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => openEditZoneModal(zone)}
-                                      className="rounded border border-neutral-700 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
-                                    >
-                                      Modifier
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => onDeleteZone(zone["@id"])}
-                                      className="rounded border border-rose-900/50 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {/* Puces NFC affectées à cette zone */}
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-800/70 pt-2">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {zoneTags.length === 0 ? (
-                                      <span className="text-[11px] text-neutral-500">
-                                        Aucune puce NFC associée
-                                      </span>
-                                    ) : (
-                                      zoneTags.map((tg) => (
-                                        <span
-                                          key={tg["@id"]}
-                                          className="inline-flex items-center gap-1 rounded border border-purple-500/40 bg-purple-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-purple-200"
-                                        >
-                                          <a
-                                            href={`/g/${tg.shortUid}`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="hover:underline"
-                                          >
-                                            #{tg.shortUid} ↗
-                                          </a>
-                                          {isAdmin && (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                onAssignTagToZone(tg["@id"], null)
-                                              }
-                                              title="Détacher de cette zone"
-                                              className="ml-1 text-purple-300 hover:text-white"
-                                            >
-                                              ×
-                                            </button>
-                                          )}
-                                        </span>
-                                      ))
-                                    )}
-                                  </div>
-
-                                  {isAdmin && availableTags.length > 0 && (
-                                    <select
-                                      value=""
-                                      onChange={(e) => {
-                                        if (e.target.value) {
-                                          void onAssignTagToZone(
-                                            e.target.value,
-                                            zone["@id"],
-                                          );
-                                        }
-                                      }}
-                                      className="rounded border border-neutral-700 bg-neutral-950 px-2 py-0.5 text-[11px] text-neutral-300"
-                                    >
-                                      <option value="">+ Affecter un tag NFC…</option>
-                                      {availableTags.map((t) => (
-                                        <option key={t["@id"]} value={t["@id"]}>
-                                          #{t.shortUid} ({t.status})
-                                        </option>
-                                      ))}
-                                    </select>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      )}
 
       {/* Modale Création / Édition Compte Client */}
       {accountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <form
             onSubmit={submitAccount}
-            className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <h2 className="text-base font-bold">
                 {editingAccount
-                  ? `Modifier le compte « ${editingAccount.name} »`
+                  ? `Modifier « ${editingAccount.name} »`
                   : "Nouveau compte client"}
               </h2>
               <button
@@ -771,7 +715,7 @@ export function ClientsView({
                 value={accName}
                 onChange={(e) => setAccName(e.target.value)}
                 placeholder="ex: Chalets Prestige Courchevel"
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
@@ -779,7 +723,7 @@ export function ClientsView({
               <select
                 value={accType}
                 onChange={(e) => setAccType(e.target.value)}
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               >
                 <option value="B2B">B2B (Conciergerie / Agence / Hôtel)</option>
                 <option value="B2C">B2C (Propriétaire particulier)</option>
@@ -789,14 +733,14 @@ export function ClientsView({
               <button
                 type="button"
                 onClick={() => setAccountModal(false)}
-                className="rounded border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+                className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={savingAcc}
-                className="rounded bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-neutral-950"
+                className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
               >
                 {savingAcc
                   ? "Enregistrement…"
@@ -814,13 +758,13 @@ export function ClientsView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <form
             onSubmit={submitProperty}
-            className="flex w-full max-w-md flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex w-full max-w-md flex-col gap-3.5 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <h2 className="text-base font-bold">
                 {editingProperty
                   ? `Modifier « ${editingProperty.name} »`
-                  : "Nouvelle propriété"}
+                  : "Nouveau logement"}
               </h2>
               <button
                 type="button"
@@ -836,7 +780,7 @@ export function ClientsView({
                 <select
                   value={propAccount}
                   onChange={(e) => setPropAccount(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
                 >
                   {accounts.map((a) => (
                     <option key={a["@id"]} value={a["@id"]}>
@@ -847,67 +791,65 @@ export function ClientsView({
               </label>
             )}
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
-              Nom du logement / chalet
+              Nom du logement
               <input
                 type="text"
                 required
                 value={propName}
                 onChange={(e) => setPropName(e.target.value)}
                 placeholder="ex: Chalet Le Flocon d'Or"
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
             {editingProperty && editingProperty.canManageWifi === false ? (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-200">
-                Les identifiants Wi-Fi de ce logement sont chiffrés et gérés exclusivement par le client propriétaire du compte.
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3 text-xs text-neutral-400">
+                Les identifiants Wi-Fi sont gérés exclusivement par le client propriétaire du compte.
               </div>
             ) : (
-              <div className="flex flex-col gap-2.5 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+              <div className="flex flex-col gap-2.5 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-neutral-200">
-                    Identifiants Wi-Fi (chiffrés AES-256-GCM en base)
+                    Connexion Wi-Fi (chiffrée AES-256-GCM)
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowPassInput((v) => !v)}
-                    className="text-[11px] text-sky-400 hover:underline"
+                    className="text-[11px] text-neutral-400 hover:text-white"
                   >
-                    {showPassInput ? "Masquer la saisie" : "Afficher la saisie"}
+                    {showPassInput ? "Masquer" : "Afficher"}
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1 text-xs text-neutral-300">
-                    Wi-Fi SSID
+                  <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                    Nom du réseau (SSID)
                     <input
                       type="text"
                       value={propWifiSsid}
                       onChange={(e) => setPropWifiSsid(e.target.value)}
                       placeholder="ex: Chalet_Flocon_5G"
-                      className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 font-mono text-sm"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 font-mono text-sm text-white"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 text-xs text-neutral-300">
-                    Mot de passe Wi-Fi
+                  <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                    Mot de passe
                     <input
                       type={showPassInput ? "text" : "password"}
                       value={propWifiPass}
                       onChange={(e) => setPropWifiPass(e.target.value)}
                       placeholder={
                         editingProperty?.wifiConfigured
-                          ? "•••••••• (vide = conserver)"
+                          ? " Vide = conserver"
                           : "Clé WPA2/WPA3"
                       }
-                      className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 font-mono text-sm"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 font-mono text-sm text-white"
                     />
                   </label>
                 </div>
 
-                <div className="flex flex-col gap-1 border-t border-neutral-800/80 pt-2 text-xs text-neutral-300">
+                <div className="flex flex-col gap-1 border-t border-neutral-800/80 pt-2 text-xs text-neutral-400">
                   <div className="flex items-center justify-between">
-                    <span>
-                      Code PIN Voyageur optionnel (demandé sur `/g/[shortUid]` avant de révéler le Wi-Fi)
-                    </span>
+                    <span>Code PIN voyageur (optionnel)</span>
                     {editingProperty?.wifiProtectedByCode && (
                       <label className="flex items-center gap-1 text-[11px] text-rose-300">
                         <input
@@ -915,7 +857,7 @@ export function ClientsView({
                           checked={clearAccessCode}
                           onChange={(e) => setClearAccessCode(e.target.checked)}
                         />
-                        Désactiver le PIN
+                        Retirer le PIN
                       </label>
                     )}
                   </div>
@@ -926,10 +868,10 @@ export function ClientsView({
                       onChange={(e) => setPropWifiAccessCode(e.target.value)}
                       placeholder={
                         editingProperty?.wifiProtectedByCode
-                          ? "PIN actif (laisser vide pour conserver, ou saisir un nouveau PIN)"
-                          : "Optionnel — ex: 2048 (4 derniers chiffres boîte à clés)"
+                          ? "PIN actif (laisser vide pour conserver)"
+                          : "Ex: 2516 (demandé avant d'afficher le Wi-Fi)"
                       }
-                      className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 font-mono text-xs"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 font-mono text-xs text-white"
                     />
                   )}
                 </div>
@@ -942,7 +884,7 @@ export function ClientsView({
                 value={propGuideUrl}
                 onChange={(e) => setPropGuideUrl(e.target.value)}
                 placeholder="https://..."
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-sm"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
@@ -951,21 +893,21 @@ export function ClientsView({
                 rows={3}
                 value={propInstructions}
                 onChange={(e) => setPropInstructions(e.target.value)}
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-sm"
               />
             </label>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setPropModal(false)}
-                className="rounded border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+                className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={savingProp}
-                className="rounded bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-neutral-950"
+                className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
               >
                 {savingProp
                   ? "Enregistrement…"
@@ -983,13 +925,11 @@ export function ClientsView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <form
             onSubmit={submitZone}
-            className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <h2 className="text-base font-bold">
-                {editingZone
-                  ? `Modifier la zone « ${editingZone.name} »`
-                  : "Nouvelle zone / emplacement NFC"}
+                {editingZone ? `Modifier « ${editingZone.name} »` : "Nouvelle zone"}
               </h2>
               <button
                 type="button"
@@ -1001,23 +941,23 @@ export function ClientsView({
             </div>
 
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
-              Nom de la zone dans le logement
+              Nom de la zone
               <input
                 type="text"
                 required
                 value={zoneName}
                 onChange={(e) => setZoneName(e.target.value)}
-                placeholder="ex: Îlot Cuisine, Table Salon, Entrée Skis…"
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                placeholder="ex: Îlot Cuisine, Table Salon…"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
-              Type de pose du support
+              Type de pose
               <select
                 value={zoneMountType}
                 onChange={(e) => setZoneMountType(e.target.value)}
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               >
                 {MOUNT_TYPES.map((mt) => (
                   <option key={mt} value={mt}>
@@ -1031,20 +971,20 @@ export function ClientsView({
               <button
                 type="button"
                 onClick={() => setZoneModal(false)}
-                className="rounded border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+                className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={savingZone}
-                className="rounded bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-neutral-950"
+                className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
               >
                 {savingZone
                   ? "Enregistrement…"
                   : editingZone
                     ? "Enregistrer"
-                    : "Ajouter la zone"}
+                    : "Ajouter"}
               </button>
             </div>
           </form>
@@ -1068,11 +1008,20 @@ interface NfcTagsViewProps {
 }
 
 const NFC_STATUS_BADGES: Record<NfcTagItem["status"], { label: string; cls: string }> = {
-  stock: { label: "En stock", cls: "border-neutral-700 bg-neutral-800 text-neutral-300" },
-  encoded: { label: "Encodé", cls: "border-sky-500/40 bg-sky-500/15 text-sky-300" },
-  assigned: { label: "Assigné", cls: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" },
-  defective: { label: "Défectueux", cls: "border-rose-500/40 bg-rose-500/15 text-rose-300" },
+  stock: { label: "En stock", cls: "bg-neutral-800 text-neutral-300" },
+  encoded: { label: "Encodé", cls: "bg-sky-500/15 text-sky-300" },
+  assigned: { label: "Assigné", cls: "bg-emerald-500/15 text-emerald-300" },
+  defective: { label: "Défectueux", cls: "bg-rose-500/15 text-rose-300" },
 };
+
+function generateQuickShortUid(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  for (let i = 0; i < 4; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `VA${suffix}`;
+}
 
 export function NfcTagsView({
   nfcTags,
@@ -1083,8 +1032,9 @@ export function NfcTagsView({
   onUpdateNfcTag,
   onDeleteNfcTag,
 }: NfcTagsViewProps) {
-  const [shortUid, setShortUid] = useState("");
+  const [shortUid, setShortUid] = useState(() => generateQuickShortUid());
   const [status, setStatus] = useState<NfcTagItem["status"]>("stock");
+  const [statusFilter, setStatusFilter] = useState<"all" | NfcTagItem["status"]>("all");
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -1094,7 +1044,7 @@ export function NfcTagsView({
     setSaving(true);
     try {
       await onCreateNfcTag({ shortUid: shortUid.trim().toUpperCase(), status });
-      setShortUid("");
+      setShortUid(generateQuickShortUid());
     } finally {
       setSaving(false);
     }
@@ -1114,52 +1064,99 @@ export function NfcTagsView({
     }
   };
 
+  const filteredTags =
+    statusFilter === "all"
+      ? nfcTags
+      : nfcTags.filter((t) => t.status === statusFilter);
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tags NFC Atelier</h1>
-          <p className="text-sm text-neutral-400">
-            Inventaire des puces NFC, UID courts (`/g/[shortUid]`), affectation commande/zone et test du portail voyageur
+          <h1 className="text-xl font-bold tracking-tight text-white">Tags NFC</h1>
+          <p className="text-xs text-neutral-400">
+            Inventaire des puces NFC, affectation aux zones et test du portail voyageur
           </p>
         </div>
-        <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            maxLength={10}
-            required
-            placeholder="UID court (ex: VA2048)"
-            value={shortUid}
-            onChange={(e) => setShortUid(e.target.value)}
-            className="w-40 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-100"
-          />
+        <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center rounded-lg border border-neutral-800 bg-neutral-900 pr-1">
+            <input
+              type="text"
+              maxLength={10}
+              required
+              placeholder="VA2048"
+              value={shortUid}
+              onChange={(e) => setShortUid(e.target.value.toUpperCase())}
+              className="w-28 bg-transparent px-2.5 py-1.5 font-mono text-xs text-white outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setShortUid(generateQuickShortUid())}
+              className="rounded px-1.5 py-0.5 text-[10px] text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            >
+              Générer
+            </button>
+          </div>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as NfcTagItem["status"])}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-xs text-neutral-200"
+            className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1.5 text-xs text-neutral-200"
           >
             <option value="stock">En stock</option>
             <option value="encoded">Encodé</option>
             <option value="assigned">Assigné</option>
-            <option value="defective">Défectueux</option>
           </select>
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-emerald-500 px-3.5 py-1.5 text-xs font-semibold text-neutral-950 hover:bg-emerald-400"
+            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-neutral-950 hover:bg-neutral-200"
           >
-            + Enregistrer Tag
+            + Ajouter
           </button>
         </form>
       </div>
 
-      {nfcTags.length === 0 ? (
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500">
-          Aucun tag NFC enregistré. Ajoutez un UID court ci-dessus ou encodez une puce depuis une fiche commande.
+      {/* Filtres rapides par statut */}
+      <div className="flex flex-wrap items-center gap-1 self-start rounded-xl border border-neutral-800/80 bg-neutral-900/50 p-1 text-xs">
+        {(
+          [
+            { id: "all", label: `Tous (${nfcTags.length})` },
+            {
+              id: "stock",
+              label: `En stock (${nfcTags.filter((t) => t.status === "stock").length})`,
+            },
+            {
+              id: "assigned",
+              label: `Assignés (${nfcTags.filter((t) => t.status === "assigned").length})`,
+            },
+            {
+              id: "defective",
+              label: `Défectueux (${nfcTags.filter((t) => t.status === "defective").length})`,
+            },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setStatusFilter(tab.id)}
+            className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+              statusFilter === tab.id
+                ? "bg-neutral-800 text-white"
+                : "text-neutral-400 hover:text-neutral-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {filteredTags.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-neutral-800/80 py-12 text-center text-xs text-neutral-500">
+          Aucun tag NFC dans cette catégorie.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {nfcTags.map((tag) => {
+          {filteredTags.map((tag) => {
             const badge = NFC_STATUS_BADGES[tag.status] ?? NFC_STATUS_BADGES.stock;
             const parentOrder = orders.find((o) =>
               (o.orderItems ?? []).some((it) => it["@id"] === tag.orderItem),
@@ -1171,73 +1168,62 @@ export function NfcTagsView({
             return (
               <div
                 key={tag["@id"]}
-                className="flex flex-col justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 p-4"
+                className="flex flex-col justify-between gap-3 rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-4"
               >
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="font-mono text-base font-bold text-neutral-100">
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-sm font-bold text-white">
                         #{tag.shortUid}
-                      </div>
-                      <div className="text-[11px] text-neutral-500">
-                        URL NDEF : <span className="font-mono text-neutral-300">/g/{tag.shortUid}</span>
-                      </div>
+                      </span>
+                      <span className="font-mono text-[11px] text-neutral-500">
+                        /g/{tag.shortUid}
+                      </span>
                     </div>
-                    <span
-                      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badge.cls}`}
-                    >
+                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
                       {badge.label}
                     </span>
                   </div>
 
-                  {tag.encodeAt && (
-                    <div className="text-[11px] text-neutral-400">
-                      Encodé le {new Date(tag.encodeAt).toLocaleDateString("fr-FR")}
-                    </div>
-                  )}
-
                   {parentOrder && (
-                    <div className="rounded-lg border border-purple-500/30 bg-purple-950/20 px-2.5 py-1.5 text-xs text-purple-200">
-                      <span className="font-mono font-bold">CMD #{parentOrder.id}</span> —{" "}
+                    <div className="text-xs text-neutral-400">
+                      Commande <strong className="font-mono text-neutral-200">#{parentOrder.id}</strong> •{" "}
                       {orderItemObj?.productName ?? "Support"}
                     </div>
                   )}
 
-                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                    Zone / Emplacement assigné
-                    <select
-                      value={tag.zone ?? ""}
-                      onChange={(e) =>
-                        onUpdateNfcTag(tag["@id"], {
-                          zone: e.target.value || null,
-                          status: e.target.value ? "assigned" : tag.status,
-                        })
-                      }
-                      className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-200"
-                    >
-                      <option value="">— Aucune zone assignée —</option>
-                      {zones.map((z) => {
-                        const p = properties.find((pr) => pr["@id"] === z.property);
-                        return (
-                          <option key={z["@id"]} value={z["@id"]}>
-                            {p ? `${p.name} — ` : ""}
-                            {z.name}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
+                  <select
+                    value={tag.zone ?? ""}
+                    onChange={(e) =>
+                      void onUpdateNfcTag(tag["@id"], {
+                        zone: e.target.value || null,
+                        status: e.target.value ? "assigned" : tag.status,
+                      })
+                    }
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-200"
+                  >
+                    <option value="">— Aucune zone assignée —</option>
+                    {zones.map((z) => {
+                      const p = properties.find((pr) => pr["@id"] === z.property);
+                      return (
+                        <option key={z["@id"]} value={z["@id"]}>
+                          {p ? `${p.name} — ` : ""}
+                          {z.name}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-neutral-800 pt-2.5 text-xs">
+                <div className="flex items-center justify-between gap-1.5 border-t border-neutral-800/70 pt-2.5 text-xs">
                   <select
                     value={tag.status}
                     onChange={(e) =>
-                      onUpdateNfcTag(tag["@id"], {
+                      void onUpdateNfcTag(tag["@id"], {
                         status: e.target.value as NfcTagItem["status"],
                       })
                     }
-                    className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-200"
+                    className="rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-300"
                   >
                     <option value="stock">En stock</option>
                     <option value="encoded">Encodé</option>
@@ -1248,25 +1234,25 @@ export function NfcTagsView({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => copyTagUrl(tag.shortUid)}
-                      className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-[11px] text-neutral-200 hover:bg-neutral-700"
+                      onClick={() => void copyTagUrl(tag.shortUid)}
+                      className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-800 hover:text-white"
                     >
-                      {copiedId === tag.shortUid ? "✓ Copié" : "Copier URL"}
+                      {copiedId === tag.shortUid ? "✓ Copié" : "Copier lien"}
                     </button>
                     <a
                       href={`/g/${tag.shortUid}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded border border-sky-500/40 bg-sky-500/15 px-2 py-1 text-[11px] font-medium text-sky-300 hover:bg-sky-500/25"
+                      className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-[11px] text-sky-300 hover:bg-neutral-800"
                     >
-                      Tester ↗
+                      Ouvrir ↗
                     </a>
                     <button
                       type="button"
-                      onClick={() => onDeleteNfcTag(tag["@id"])}
-                      className="rounded border border-rose-900/60 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                      onClick={() => void onDeleteNfcTag(tag["@id"])}
+                      className="rounded-md px-1.5 py-1 text-xs text-neutral-500 hover:bg-rose-950/40 hover:text-rose-300"
                     >
-                      Suppr.
+                      ×
                     </button>
                   </div>
                 </div>
@@ -1286,6 +1272,13 @@ interface SupportTicketsViewProps {
   onCreateTicket: (payload: { subject: string; message: string; account: string }) => Promise<void>;
   onUpdateTicketStatus: (ticketIri: string, status: SupportTicketItem["status"]) => Promise<void>;
 }
+
+const TICKET_STATUS_LABELS: Record<SupportTicketItem["status"], { label: string; cls: string }> = {
+  open: { label: "Ouvert", cls: "bg-amber-500/15 text-amber-300" },
+  in_progress: { label: "En cours", cls: "bg-sky-500/15 text-sky-300" },
+  resolved: { label: "Résolu", cls: "bg-emerald-500/15 text-emerald-300" },
+  closed: { label: "Fermé", cls: "bg-neutral-800 text-neutral-400" },
+};
 
 export function SupportTicketsView({
   isAdmin,
@@ -1318,12 +1311,12 @@ export function SupportTicketsView({
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Support Client & Brouillons IA</h1>
-          <p className="text-sm text-neutral-400">
-            Tickets SAV clients et pré-réponses assistées par IA pour le staff VisuAlpes
+          <h1 className="text-xl font-bold tracking-tight text-white">Support</h1>
+          <p className="text-xs text-neutral-400">
+            Demandes d&apos;assistance et suivi SAV
           </p>
         </div>
         <button
@@ -1332,71 +1325,65 @@ export function SupportTicketsView({
             setAccountIri(accounts[0]?.["@id"] ?? "/api/accounts/1");
             setModalOpen(true);
           }}
-          className="rounded-lg bg-emerald-500 px-3.5 py-2 text-xs font-semibold text-neutral-950 hover:bg-emerald-400"
+          className="rounded-lg bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-950 hover:bg-neutral-200"
         >
           + Nouveau ticket
         </button>
       </div>
 
       {tickets.length === 0 ? (
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500">
+        <div className="rounded-2xl border border-dashed border-neutral-800/80 py-12 text-center text-xs text-neutral-500">
           Aucun ticket de support ouvert.
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {tickets.map((t) => {
             const acc = accounts.find((a) => a["@id"] === t.account);
+            const badge = TICKET_STATUS_LABELS[t.status] ?? TICKET_STATUS_LABELS.open;
             return (
               <div
                 key={t["@id"]}
-                className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 p-4"
+                className="flex flex-col gap-2.5 rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-4"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-neutral-500">#{t.id}</span>
-                      <h3 className="text-base font-bold text-neutral-100">{t.subject}</h3>
-                    </div>
-                    <span className="text-xs text-neutral-400">
-                      Client : <strong className="text-neutral-200">{acc?.name ?? t.account}</strong>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-neutral-500">#{t.id}</span>
+                    <h3 className="text-sm font-bold text-white">{t.subject}</h3>
+                    <span className="text-xs text-neutral-500">
+                      • {acc?.name ?? t.account}
                     </span>
                   </div>
 
-                  {isAdmin ? (
-                    <select
-                      value={t.status}
-                      onChange={(e) =>
-                        onUpdateTicketStatus(t["@id"], e.target.value as SupportTicketItem["status"])
-                      }
-                      className="rounded border border-neutral-700 bg-neutral-950 px-2.5 py-1 text-xs text-neutral-200"
-                    >
-                      <option value="open">Ouvert</option>
-                      <option value="in_progress">En cours</option>
-                      <option value="resolved">Résolu</option>
-                      <option value="closed">Fermé</option>
-                    </select>
-                  ) : (
-                    <span className="rounded border border-neutral-700 bg-neutral-800 px-2.5 py-0.5 text-xs text-neutral-300">
-                      {t.status}
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
+                      {badge.label}
                     </span>
-                  )}
+                    {isAdmin && (
+                      <select
+                        value={t.status}
+                        onChange={(e) =>
+                          void onUpdateTicketStatus(
+                            t["@id"],
+                            e.target.value as SupportTicketItem["status"],
+                          )
+                        }
+                        className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-xs text-neutral-200"
+                      >
+                        <option value="open">Ouvert</option>
+                        <option value="in_progress">En cours</option>
+                        <option value="resolved">Résolu</option>
+                        <option value="closed">Fermé</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
 
-                <p className="rounded-lg border border-neutral-800/80 bg-neutral-950/60 p-3 text-xs text-neutral-200">
-                  {t.message}
-                </p>
+                <p className="text-xs leading-relaxed text-neutral-300">{t.message}</p>
 
-                {isAdmin && t.aiDraft && (
-                  <div className="rounded-lg border border-purple-500/30 bg-purple-950/20 p-3 text-xs text-purple-200">
-                    <div className="mb-1 flex items-center justify-between font-semibold">
-                      <span>Suggestion de réponse IA</span>
-                      {typeof t.aiConfidence === "number" && (
-                        <span className="font-mono text-[11px]">
-                          Confiance : {Math.round(t.aiConfidence * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    <p>{t.aiDraft}</p>
+                {t.aiDraft && (
+                  <div className="rounded-xl border border-sky-500/25 bg-sky-950/15 p-3 text-xs text-sky-200">
+                    <span className="font-semibold text-sky-300">Suggestion IA : </span>
+                    {t.aiDraft}
                   </div>
                 )}
               </div>
@@ -1409,16 +1396,25 @@ export function SupportTicketsView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <form
             onSubmit={handleCreate}
-            className="flex w-full max-w-md flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
           >
-            <h2 className="text-base font-bold">Ouvrir un ticket support</h2>
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h2 className="text-base font-bold">Nouveau ticket</h2>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="text-sm text-neutral-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
             {isAdmin && accounts.length > 0 && (
               <label className="flex flex-col gap-1 text-xs text-neutral-300">
-                Compte client
+                Client
                 <select
                   value={accountIri}
                   onChange={(e) => setAccountIri(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
                 >
                   {accounts.map((a) => (
                     <option key={a["@id"]} value={a["@id"]}>
@@ -1435,34 +1431,34 @@ export function SupportTicketsView({
                 required
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="ex: Reprogrammation d'un support NFC"
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                placeholder="ex: Modification du livret d'accueil"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Message
               <textarea
-                rows={3}
+                rows={4}
                 required
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="rounded border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+                className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-neutral-950"
+                className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
               >
-                {saving ? "Envoi…" : "Créer le ticket"}
+                {saving ? "Envoi…" : "Envoyer"}
               </button>
             </div>
           </form>
@@ -1471,4 +1467,3 @@ export function SupportTicketsView({
     </div>
   );
 }
-
