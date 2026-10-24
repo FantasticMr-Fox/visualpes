@@ -3,6 +3,11 @@
 namespace App\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
 use App\Repository\PropertyRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -10,7 +15,16 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: PropertyRepository::class)]
-#[ApiResource]
+#[ApiResource(
+    operations: [
+        new GetCollection(),
+        new Get(),
+        new Post(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()"),
+        new Patch(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()"),
+        new Delete(),
+    ],
+    security: "is_granted('ROLE_USER')",
+)]
 class Property
 {
     #[ORM\Id]

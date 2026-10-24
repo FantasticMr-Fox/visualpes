@@ -1,6 +1,17 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import {
+  API_ORIGIN,
+  API_URL,
+  MERCURE_URL,
+  UnauthorizedError,
+  apiFetch,
+  clearToken,
+  getToken,
+  getTokenRoles,
+} from "@/lib/api";
 
 interface Order {
   "@id": string;
@@ -16,33 +27,62 @@ const COLUMNS = [
   { id: "completed", title: "Terminé", color: "border-emerald-500/40 bg-emerald-500/5 text-emerald-400" },
 ] as const;
 
+// Jeton lu depuis localStorage. `undefined` = rendu serveur / hydratation (encore inconnu).
+const subscribeToken = (onChange: () => void) => {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+};
+const getServerToken = (): string | null | undefined => undefined;
+
 export default function KanbanPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [connected, setConnected] = useState<boolean>(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const token = useSyncExternalStore<string | null | undefined>(subscribeToken, getToken, getServerToken);
+  const authReady = typeof token === "string";
+  const roleWarning =
+    authReady && !getTokenRoles().includes("ROLE_ADMIN")
+      ? "Accès réservé au staff atelier : vous pouvez consulter les commandes mais pas changer leur statut."
+      : null;
 
   const scanBuffer = useRef<string>("");
   const lastKeyTime = useRef<number>(0);
 
+  const handleUnauthorized = useCallback(() => {
+    clearToken();
+    router.replace("/login");
+  }, [router]);
+
+  const logout = () => handleUnauthorized();
+
+  // 0. Garde d'authentification : pas de jeton → page de connexion
+  useEffect(() => {
+    if (token === null) router.replace("/login");
+  }, [token, router]);
+
   // 1. Récupération initiale des commandes
   useEffect(() => {
-    fetch("http://localhost/api/orders", {
-      headers: {
-        Accept: "application/ld+json",
-      },
-    })
+    if (!authReady) return;
+    apiFetch(`${API_URL}/orders`)
       .then((res) => res.json())
       .then((data) => {
         const items = data?.member ?? data?.["hydra:member"] ?? (Array.isArray(data) ? data : []);
         setOrders(items);
       })
-      .catch((err) => console.error("Erreur API:", err));
-  }, []);
+      .catch((err) => {
+        if (err instanceof UnauthorizedError) return handleUnauthorized();
+        console.error("Erreur API:", err);
+      });
+  }, [authReady, handleUnauthorized]);
 
   // 2. Abonnement temps réel Mercure SSE
   useEffect(() => {
-    const hubUrl = new URL("http://localhost/.well-known/mercure");
-    hubUrl.searchParams.append("topic", "http://localhost/api/orders/{id}");
+    if (!authReady) return;
+    const hubUrl = new URL(MERCURE_URL);
+    hubUrl.searchParams.append("topic", `${API_ORIGIN}/api/orders/{id}`);
 
     const eventSource = new EventSource(hubUrl.toString());
 
@@ -69,18 +109,36 @@ export default function KanbanPage() {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [authReady]);
 
   // 3. Mutation de statut API
   const updateStatus = async (orderIri: string, newStatus: Order["status"]) => {
     try {
-      await fetch(`http://localhost${orderIri}`, {
+      const res = await apiFetch(orderIri, {
         method: "PATCH",
         headers: { "Content-Type": "application/merge-patch+json" },
         body: JSON.stringify({ status: newStatus }),
       });
+      if (res.status === 403) {
+        setError("Action refusée : seul le staff atelier peut changer le statut d'une commande.");
+      }
     } catch (err) {
+      if (err instanceof UnauthorizedError) return handleUnauthorized();
       console.error("Échec de mise à jour du statut :", err);
+    }
+  };
+
+  const processHardwareScan = (code: string) => {
+    setLastScanned(code);
+    const orderId = parseInt(code.replace(/\D/g, ""), 10);
+    const targetOrder = orders.find((o) => o.id === orderId);
+
+    if (!targetOrder) return;
+
+    const currentIndex = COLUMNS.findIndex((c) => c.id === targetOrder.status);
+    if (currentIndex < COLUMNS.length - 1) {
+      const nextStatus = COLUMNS[currentIndex + 1].id;
+      updateStatus(targetOrder["@id"], nextStatus);
     }
   };
 
@@ -108,20 +166,6 @@ export default function KanbanPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
-  const processHardwareScan = (code: string) => {
-    setLastScanned(code);
-    const orderId = parseInt(code.replace(/\D/g, ""), 10);
-    const targetOrder = orders.find((o) => o.id === orderId);
-
-    if (!targetOrder) return;
-
-    const currentIndex = COLUMNS.findIndex((c) => c.id === targetOrder.status);
-    if (currentIndex < COLUMNS.length - 1) {
-      const nextStatus = COLUMNS[currentIndex + 1].id;
-      updateStatus(targetOrder["@id"], nextStatus);
-    }
-  };
-
   return (
     <main className="min-h-screen bg-neutral-950 p-6 text-neutral-100">
       <header className="mb-8 flex items-center justify-between border-b border-neutral-800 pb-4">
@@ -139,8 +183,20 @@ export default function KanbanPage() {
             <span className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
             {connected ? "Mercure Connecté" : "Hors ligne"}
           </div>
+          <button
+            onClick={logout}
+            className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800"
+          >
+            Déconnexion
+          </button>
         </div>
       </header>
+
+      {(error ?? roleWarning) && (
+        <div className="mb-6 rounded-lg border border-rose-800 bg-rose-950/40 px-4 py-2 text-sm text-rose-300">
+          {error ?? roleWarning}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {COLUMNS.map((col) => {

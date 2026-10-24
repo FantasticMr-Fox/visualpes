@@ -3,11 +3,25 @@
 namespace App\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
 use App\Repository\ZoneRepository;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: ZoneRepository::class)]
-#[ApiResource]
+#[ApiResource(
+    operations: [
+        new GetCollection(),
+        new Get(),
+        new Post(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getProperty()?.getAccount() === user.getAccount()"),
+        new Patch(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getProperty()?.getAccount() === user.getAccount()"),
+        new Delete(),
+    ],
+    security: "is_granted('ROLE_USER')",
+)]
 class Zone
 {
     #[ORM\Id]
