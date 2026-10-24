@@ -10,9 +10,11 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\OrderRepository;
+use App\State\OrderStateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: OrderRepository::class)]
@@ -21,10 +23,12 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(),
         new Get(),
-        new Post(security: "is_granted('ROLE_ADMIN')"),
-        new Patch(security: "is_granted('ROLE_ADMIN')"),
+        new Post(security: "is_granted('ROLE_ADMIN')", processor: OrderStateProcessor::class),
+        new Patch(security: "is_granted('ROLE_ADMIN')", processor: OrderStateProcessor::class),
         new Delete(security: "is_granted('ROLE_ADMIN')"),
     ],
+    normalizationContext: ['groups' => ['order:read']],
+    denormalizationContext: ['groups' => ['order:write']],
     security: "is_granted('ROLE_USER')",
     mercure: [
         'private' => true,
@@ -41,25 +45,34 @@ class Order
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['order:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 50)]
     #[Assert\NotBlank]
     #[Assert\Choice(choices: self::STATUSES)]
+    #[Groups(['order:read', 'order:write'])]
     private ?string $status = 'pending';
 
     #[ORM\Column]
     #[ApiProperty(writable: false)]
+    #[Groups(['order:read'])]
     private ?\DateTimeImmutable $createdAt = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['order:read'])]
+    private bool $stockDeducted = false;
 
     #[ORM\ManyToOne(inversedBy: 'orders')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['order:read', 'order:write'])]
     private ?Account $account = null;
 
     /**
      * @var Collection<int, OrderItem>
      */
-    #[ORM\OneToMany(targetEntity: OrderItem::class, mappedBy: 'parentOrder', orphanRemoval: true)]
+    #[ORM\OneToMany(targetEntity: OrderItem::class, mappedBy: 'parentOrder', cascade: ['persist', 'remove'], orphanRemoval: true)]
+    #[Groups(['order:read', 'order:write'])]
     private Collection $orderItems;
 
     public function __construct()
@@ -93,6 +106,18 @@ class Order
     public function setCreatedAt(\DateTimeImmutable $createdAt): static
     {
         $this->createdAt = $createdAt;
+
+        return $this;
+    }
+
+    public function isStockDeducted(): bool
+    {
+        return $this->stockDeducted;
+    }
+
+    public function setStockDeducted(bool $stockDeducted): static
+    {
+        $this->stockDeducted = $stockDeducted;
 
         return $this;
     }

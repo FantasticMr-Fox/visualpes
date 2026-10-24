@@ -11,6 +11,8 @@ use App\Entity\NfcTag;
 use App\Entity\Order;
 use App\Entity\OrderItem;
 use App\Entity\Property;
+use App\Entity\StockItem;
+use App\Entity\StockOrder;
 use App\Entity\SupportTicket;
 use App\Entity\User;
 use App\Entity\Zone;
@@ -83,6 +85,8 @@ final readonly class CurrentAccountExtension implements QueryCollectionExtension
                 break;
 
             case NfcTag::class:
+            case StockItem::class:
+            case StockOrder::class:
                 // Ressource interne atelier : jamais visible par un client.
                 $queryBuilder->andWhere('1 = 0');
 

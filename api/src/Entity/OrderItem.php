@@ -13,6 +13,7 @@ use App\Repository\OrderItemRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: OrderItemRepository::class)]
 #[ApiResource(
@@ -30,12 +31,15 @@ class OrderItem
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['order:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['order:read', 'order:write'])]
     private ?string $productName = null;
 
     #[ORM\Column]
+    #[Groups(['order:read', 'order:write'])]
     private ?int $quantity = null;
 
     #[ORM\ManyToOne(inversedBy: 'orderItems')]

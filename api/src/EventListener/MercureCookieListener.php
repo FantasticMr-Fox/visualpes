@@ -49,13 +49,19 @@ final readonly class MercureCookieListener
 
         if ($this->security->isGranted('ROLE_ADMIN')) {
             $topic = \sprintf('%s/api/orders/{id}', $baseUrl);
+            $grants = [
+                $topic,
+                \sprintf('%s/api/stock_items/{id}', $baseUrl),
+                \sprintf('%s/api/stock_orders/{id}', $baseUrl),
+            ];
         } elseif (null !== $user->getAccount()?->getId()) {
             $topic = \sprintf('%s/api/accounts/%d/orders/{id}', $baseUrl, $user->getAccount()->getId());
+            $grants = [$topic];
         } else {
             return;
         }
 
-        $this->authorization->setCookie($request, [$topic]);
+        $this->authorization->setCookie($request, $grants);
         $response->headers->set('X-Mercure-Topic', $topic);
     }
 }
