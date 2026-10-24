@@ -49,7 +49,17 @@ export interface Order {
   stockCredited?: boolean;
   targetStockItem?: StockItemSummary | null;
   account?: AccountSummary | string | null;
+  workshopNotes?: string | null;
+  trackingNumber?: string | null;
   orderItems?: OrderItem[];
+}
+
+export interface UserItem {
+  "@id": string;
+  id: number;
+  email: string;
+  roles: string[];
+  account: string;
 }
 
 export interface ZoneItem {

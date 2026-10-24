@@ -8,12 +8,14 @@ import type {
   Order,
   PropertyItem,
   SupportTicketItem,
+  UserItem,
   ZoneItem,
 } from "@/types/erp";
 
 interface ClientsViewProps {
   isAdmin: boolean;
   accounts: AccountSummary[];
+  users: UserItem[];
   properties: PropertyItem[];
   zones: ZoneItem[];
   nfcTags: NfcTagItem[];
@@ -23,6 +25,14 @@ interface ClientsViewProps {
     payload: { name: string; type: string },
   ) => Promise<void>;
   onDeleteAccount: (accountIri: string) => Promise<void>;
+  onCreateUser: (payload: {
+    email: string;
+    plainPassword: string;
+    account: string;
+    roles?: string[];
+  }) => Promise<void>;
+  onUpdateUserPassword: (userIri: string, plainPassword: string) => Promise<void>;
+  onDeleteUser: (userIri: string) => Promise<void>;
   onCreateProperty: (payload: {
     name: string;
     account: string;
@@ -71,12 +81,16 @@ const MOUNT_TYPES = ["Comptoir", "Mural", "Table", "Chevet", "Entrée", "Extéri
 export function ClientsView({
   isAdmin,
   accounts,
+  users,
   properties,
   zones,
   nfcTags,
   onCreateAccount,
   onUpdateAccount,
   onDeleteAccount,
+  onCreateUser,
+  onUpdateUserPassword,
+  onDeleteUser,
   onCreateProperty,
   onUpdateProperty,
   onDeleteProperty,
@@ -87,6 +101,18 @@ export function ClientsView({
   onAssignTagToZone,
 }: ClientsViewProps) {
   const [selectedAccountFilter, setSelectedAccountFilter] = useState<string>("all");
+
+  // Modale gestion des accès utilisateurs (logins clients)
+  const [userModal, setUserModal] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [userPassword, setUserPassword] = useState("");
+  const [userAccountIri, setUserAccountIri] = useState(
+    accounts[0]?.["@id"] ?? "/api/accounts/1",
+  );
+  const [userIsAdminRole, setUserIsAdminRole] = useState(false);
+  const [savingUser, setSavingUser] = useState(false);
+  const [resetPassUserId, setResetPassUserId] = useState<number | null>(null);
+  const [resetPassValue, setResetPassValue] = useState("");
 
   // Modale création / édition Compte Client
   const [accountModal, setAccountModal] = useState(false);
@@ -162,6 +188,52 @@ export function ClientsView({
       setAccountModal(false);
     } finally {
       setSavingAcc(false);
+    }
+  };
+
+  const openUserAccessModal = (defaultAccountIri?: string) => {
+    setUserEmail("");
+    setUserPassword("");
+    setUserIsAdminRole(false);
+    setResetPassUserId(null);
+    setResetPassValue("");
+    setUserAccountIri(
+      defaultAccountIri ??
+        (selectedAccountFilter !== "all"
+          ? selectedAccountFilter
+          : accounts[0]?.["@id"] ?? "/api/accounts/1"),
+    );
+    setUserModal(true);
+  };
+
+  const submitNewUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userEmail.trim() || userPassword.length < 8) return;
+    setSavingUser(true);
+    try {
+      await onCreateUser({
+        email: userEmail.trim(),
+        plainPassword: userPassword,
+        account: userAccountIri || accounts[0]?.["@id"] || "/api/accounts/1",
+        roles: userIsAdminRole ? ["ROLE_ADMIN", "ROLE_USER"] : ["ROLE_USER"],
+      });
+      setUserEmail("");
+      setUserPassword("");
+      setUserIsAdminRole(false);
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const submitResetPassword = async (userIri: string) => {
+    if (resetPassValue.length < 8) return;
+    setSavingUser(true);
+    try {
+      await onUpdateUserPassword(userIri, resetPassValue);
+      setResetPassUserId(null);
+      setResetPassValue("");
+    } finally {
+      setSavingUser(false);
     }
   };
 
@@ -348,13 +420,22 @@ export function ClientsView({
 
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <button
-              type="button"
-              onClick={openCreateAccountModal}
-              className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
-            >
-              + Compte client
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => openUserAccessModal()}
+                className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              >
+                Accès & Logins ({users.length})
+              </button>
+              <button
+                type="button"
+                onClick={openCreateAccountModal}
+                className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
+              >
+                + Compte client
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -990,6 +1071,173 @@ export function ClientsView({
           </form>
         </div>
       )}
+
+      {/* Modale Gestion des Accès Utilisateurs (Logins Clients & Atelier) */}
+      {userModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="flex w-full max-w-lg flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div>
+                <h2 className="text-base font-bold">Accès & Identifiants de connexion</h2>
+                <p className="text-xs text-neutral-400">
+                  Créez un login client rattaché à son compte pour qu&apos;il gère son Wi-Fi et ses logements
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUserModal(false)}
+                className="text-sm text-neutral-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Formulaire d'ajout d'un utilisateur */}
+            <form
+              onSubmit={submitNewUser}
+              className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3.5 text-xs"
+            >
+              <span className="font-semibold text-neutral-200">
+                Créer un nouvel accès utilisateur
+              </span>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <label className="flex flex-col gap-1 text-neutral-400">
+                  Email de connexion
+                  <input
+                    type="email"
+                    required
+                    placeholder="client@domaine.fr"
+                    value={userEmail}
+                    onChange={(e) => setUserEmail(e.target.value)}
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-neutral-400">
+                  Mot de passe (min. 8 car.)
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    placeholder="Minimum 8 caractères"
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 font-mono text-xs text-white"
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <select
+                    value={userAccountIri}
+                    onChange={(e) => setUserAccountIri(e.target.value)}
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-200"
+                  >
+                    {accounts.map((a) => (
+                      <option key={a["@id"]} value={a["@id"]}>
+                        Compte : {a.name} ({a.type})
+                      </option>
+                    ))}
+                  </select>
+                  <label className="flex items-center gap-1.5 text-neutral-300">
+                    <input
+                      type="checkbox"
+                      checked={userIsAdminRole}
+                      onChange={(e) => setUserIsAdminRole(e.target.checked)}
+                    />
+                    Rôle Admin Atelier
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  disabled={savingUser}
+                  className="rounded-lg bg-white px-3.5 py-1.5 font-semibold text-neutral-950 hover:bg-neutral-200 disabled:opacity-50"
+                >
+                  {savingUser ? "Création…" : "+ Créer l'accès"}
+                </button>
+              </div>
+            </form>
+
+            {/* Liste des utilisateurs existants */}
+            <div className="flex max-h-60 flex-col gap-2 overflow-y-auto pr-1">
+              {users.map((u) => {
+                const acc = accounts.find((a) => a["@id"] === u.account);
+                const isUserAdmin = (u.roles ?? []).includes("ROLE_ADMIN");
+                return (
+                  <div
+                    key={u["@id"]}
+                    className="flex flex-col gap-2 rounded-xl border border-neutral-800/80 bg-neutral-950/50 px-3 py-2.5 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold text-white">
+                            {u.email}
+                          </span>
+                          <span
+                            className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                              isUserAdmin
+                                ? "bg-sky-500/15 text-sky-300"
+                                : "bg-neutral-800 text-neutral-400"
+                            }`}
+                          >
+                            {isUserAdmin ? "Admin" : "Client"}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-neutral-500">
+                          Compte : {acc?.name ?? u.account}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetPassUserId((prev) =>
+                              prev === u.id ? null : u.id,
+                            );
+                            setResetPassValue("");
+                          }}
+                          className="rounded-md border border-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                        >
+                          Mot de passe
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onDeleteUser(u["@id"])}
+                          className="rounded-md px-1.5 py-1 text-xs text-neutral-500 hover:bg-rose-950/40 hover:text-rose-300"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+
+                    {resetPassUserId === u.id && (
+                      <div className="flex items-center gap-2 border-t border-neutral-800/70 pt-2">
+                        <input
+                          type="password"
+                          minLength={8}
+                          placeholder="Nouveau mot de passe (min. 8 car.)"
+                          value={resetPassValue}
+                          onChange={(e) => setResetPassValue(e.target.value)}
+                          className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 font-mono text-xs text-white"
+                        />
+                        <button
+                          type="button"
+                          disabled={savingUser || resetPassValue.length < 8}
+                          onClick={() => void submitResetPassword(u["@id"])}
+                          className="rounded-lg bg-white px-3 py-1 text-[11px] font-semibold text-neutral-950 disabled:opacity-50"
+                        >
+                          Enregistrer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1005,6 +1253,7 @@ interface NfcTagsViewProps {
     payload: { status?: NfcTagItem["status"]; zone?: string | null },
   ) => Promise<void>;
   onDeleteNfcTag: (tagIri: string) => Promise<void>;
+  onReplaceDefectiveNfcTag: (oldTag: NfcTagItem, newShortUid: string) => Promise<void>;
 }
 
 const NFC_STATUS_BADGES: Record<NfcTagItem["status"], { label: string; cls: string }> = {
@@ -1031,12 +1280,15 @@ export function NfcTagsView({
   onCreateNfcTag,
   onUpdateNfcTag,
   onDeleteNfcTag,
+  onReplaceDefectiveNfcTag,
 }: NfcTagsViewProps) {
   const [shortUid, setShortUid] = useState(() => generateQuickShortUid());
   const [status, setStatus] = useState<NfcTagItem["status"]>("stock");
   const [statusFilter, setStatusFilter] = useState<"all" | NfcTagItem["status"]>("all");
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [replacingTagId, setReplacingTagId] = useState<number | null>(null);
+  const [replacementUid, setReplacementUid] = useState<string>("");
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1232,6 +1484,23 @@ export function NfcTagsView({
                   </select>
 
                   <div className="flex items-center gap-1">
+                    {tag.status !== "defective" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (replacingTagId === tag.id) {
+                            setReplacingTagId(null);
+                          } else {
+                            setReplacingTagId(tag.id);
+                            setReplacementUid(generateQuickShortUid());
+                          }
+                        }}
+                        title="Déclarer cette puce défectueuse et transférer sa zone/commande sur un nouvel UID"
+                        className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-[11px] text-amber-300 hover:bg-neutral-800"
+                      >
+                        SAV
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void copyTagUrl(tag.shortUid)}
@@ -1256,6 +1525,38 @@ export function NfcTagsView({
                     </button>
                   </div>
                 </div>
+
+                {replacingTagId === tag.id && (
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-950/20 p-2.5 text-xs">
+                    <input
+                      type="text"
+                      maxLength={10}
+                      value={replacementUid}
+                      onChange={(e) => setReplacementUid(e.target.value.toUpperCase())}
+                      placeholder="Nouvel UID"
+                      className="w-28 rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1 font-mono text-xs text-white"
+                    />
+                    <span className="flex-1 text-[11px] text-amber-200/90">
+                      Transfère zone & commande
+                    </span>
+                    <button
+                      type="button"
+                      disabled={saving || !replacementUid.trim()}
+                      onClick={async () => {
+                        setSaving(true);
+                        try {
+                          await onReplaceDefectiveNfcTag(tag, replacementUid);
+                          setReplacingTagId(null);
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      className="rounded-lg bg-amber-400 px-2.5 py-1 text-[11px] font-semibold text-neutral-950 hover:bg-amber-300 disabled:opacity-50"
+                    >
+                      Remplacer
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

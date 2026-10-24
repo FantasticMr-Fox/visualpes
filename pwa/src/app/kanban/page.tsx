@@ -21,6 +21,7 @@ import type {
   PropertyItem,
   StockItem,
   SupportTicketItem,
+  UserItem,
   ZoneItem,
 } from "@/types/erp";
 import { Sidebar } from "@/components/erp/Sidebar";
@@ -61,10 +62,12 @@ export default function KanbanPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ErpTab>("orders");
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
+  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
+  const [users, setUsers] = useState<UserItem[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [properties, setProperties] = useState<PropertyItem[]>([]);
   const [zones, setZones] = useState<ZoneItem[]>([]);
@@ -83,6 +86,8 @@ export default function KanbanPage() {
   const [formTargetStockIri, setFormTargetStockIri] = useState<string>("");
   const [formAccountIri, setFormAccountIri] = useState<string>("");
   const [formStatus, setFormStatus] = useState<Order["status"]>("pending");
+  const [formWorkshopNotes, setFormWorkshopNotes] = useState<string>("");
+  const [formTrackingNumber, setFormTrackingNumber] = useState<string>("");
   const [formItems, setFormItems] = useState<OrderItem[]>([
     { productName: "Support Comptoir NFC Bois", quantity: 1 },
   ]);
@@ -153,13 +158,19 @@ export default function KanbanPage() {
       setMercureTopic((prev) => prev ?? topic);
 
       if (isAdmin) {
-        const [siRes, nfcRes] = await Promise.all([
+        const [siRes, nfcRes, usrRes] = await Promise.all([
           apiFetch(`${API_URL}/stock_items`),
           apiFetch(`${API_URL}/nfc_tags`),
+          apiFetch(`${API_URL}/users`),
         ]);
-        const [siData, nfcData] = await Promise.all([siRes.json(), nfcRes.json()]);
+        const [siData, nfcData, usrData] = await Promise.all([
+          siRes.json(),
+          nfcRes.json(),
+          usrRes.json(),
+        ]);
         setStockItems(extractMembers<StockItem>(siData));
         setNfcTags(extractMembers<NfcTagItem>(nfcData));
+        setUsers(extractMembers<UserItem>(usrData));
       }
     } catch (err) {
       if (err instanceof UnauthorizedError) return handleUnauthorized();
@@ -279,6 +290,8 @@ export default function KanbanPage() {
     setFormTargetStockIri(stockItems[0]?.["@id"] ?? "");
     setFormAccountIri(accounts[0]?.["@id"] ?? "/api/accounts/1");
     setFormStatus("pending");
+    setFormWorkshopNotes("");
+    setFormTrackingNumber("");
     setFormItems(
       defaultStockOrder
         ? [
@@ -304,6 +317,8 @@ export default function KanbanPage() {
           : accounts[0]?.["@id"] ?? "/api/accounts/1";
     setFormAccountIri(accIri);
     setFormStatus(order.status);
+    setFormWorkshopNotes(order.workshopNotes ?? "");
+    setFormTrackingNumber(order.trackingNumber ?? "");
     setFormItems(
       order.orderItems && order.orderItems.length > 0
         ? order.orderItems.map((it) => ({
@@ -313,6 +328,19 @@ export default function KanbanPage() {
         : [{ productName: "Support Comptoir NFC Bois", quantity: 1 }],
     );
     setModalOpen(true);
+  };
+
+  const prefillFromPropertyZones = (propertyIri: string) => {
+    const prop = properties.find((p) => p["@id"] === propertyIri);
+    const propZones = zones.filter((z) => z.property === propertyIri);
+    if (propZones.length === 0) return;
+
+    setFormItems(
+      propZones.map((z) => ({
+        productName: `Support ${z.mountType || "Comptoir"} NFC Bois — ${z.name}${prop ? ` (${prop.name})` : ""}`,
+        quantity: 1,
+      })),
+    );
   };
 
   const saveOrderForm = async (e: React.FormEvent) => {
@@ -332,6 +360,8 @@ export default function KanbanPage() {
         targetStockItem: formIsStockOrder ? formTargetStockIri || null : null,
         account: formIsStockOrder ? null : formAccountIri,
         status: formStatus,
+        workshopNotes: formWorkshopNotes.trim() || null,
+        trackingNumber: formTrackingNumber.trim() || null,
         orderItems: cleanItems,
       };
 
@@ -477,6 +507,50 @@ export default function KanbanPage() {
     )
       return;
     const res = await apiFetch(accountIri, { method: "DELETE" });
+    if (res.ok || res.status === 204) await refreshAllData();
+  };
+
+  const createUser = async (payload: {
+    email: string;
+    plainPassword: string;
+    account: string;
+    roles?: string[];
+  }) => {
+    setError(null);
+    const res = await apiFetch(`${API_URL}/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/ld+json" },
+      body: JSON.stringify({
+        email: payload.email,
+        plainPassword: payload.plainPassword,
+        account: payload.account,
+        roles: payload.roles ?? ["ROLE_USER"],
+      }),
+    });
+    if (res.ok) {
+      await refreshAllData();
+    } else {
+      setError("Impossible de créer cet accès utilisateur (email déjà utilisé ou mot de passe < 8 car.).");
+    }
+  };
+
+  const updateUserPassword = async (userIri: string, plainPassword: string) => {
+    setError(null);
+    const res = await apiFetch(userIri, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/merge-patch+json" },
+      body: JSON.stringify({ plainPassword }),
+    });
+    if (res.ok) {
+      await refreshAllData();
+    } else {
+      setError("Impossible de mettre à jour le mot de passe (minimum 8 caractères).");
+    }
+  };
+
+  const deleteUser = async (userIri: string) => {
+    if (!window.confirm("Révoquer cet accès utilisateur ?")) return;
+    const res = await apiFetch(userIri, { method: "DELETE" });
     if (res.ok || res.status === 204) await refreshAllData();
   };
 
@@ -679,6 +753,45 @@ export default function KanbanPage() {
     if (res.ok || res.status === 204) await refreshAllData();
   };
 
+  const replaceDefectiveNfcTag = async (oldTag: NfcTagItem, newShortUid: string) => {
+    setError(null);
+    const prevZone = oldTag.zone ?? null;
+    const prevOrderItem = oldTag.orderItem ?? null;
+
+    // 1. Marquer l'ancienne puce comme défectueuse et libérer sa zone / ligne de commande
+    const resOld = await apiFetch(oldTag["@id"], {
+      method: "PATCH",
+      headers: { "Content-Type": "application/merge-patch+json" },
+      body: JSON.stringify({
+        status: "defective",
+        zone: null,
+        orderItem: null,
+      }),
+    });
+
+    if (!resOld.ok) {
+      setError("Impossible de basculer la puce actuelle en défectueuse.");
+      return;
+    }
+
+    // 2. Créer la nouvelle puce de remplacement et lui transférer la zone et la commande
+    const resNew = await apiFetch(`${API_URL}/nfc_tags`, {
+      method: "POST",
+      headers: { "Content-Type": "application/ld+json" },
+      body: JSON.stringify({
+        shortUid: newShortUid.trim().toUpperCase(),
+        status: prevZone ? "assigned" : prevOrderItem ? "encoded" : "stock",
+        zone: prevZone,
+        orderItem: prevOrderItem,
+      }),
+    });
+
+    if (!resNew.ok) {
+      setError("La puce a été marquée défectueuse, mais l'UID de remplacement existe déjà.");
+    }
+    await refreshAllData();
+  };
+
   const createTicket = async (payload: { subject: string; message: string; account: string }) => {
     const res = await apiFetch(`${API_URL}/support_tickets`, {
       method: "POST",
@@ -753,6 +866,7 @@ export default function KanbanPage() {
   const stockOrdersCount = orders.filter((o) => o.isStockOrder).length;
 
   const filteredOrders = orders.filter((order) => {
+    if (hideCompleted && order.status === "completed") return false;
     if (orderFilter === "client" && order.isStockOrder) return false;
     if (orderFilter === "stock" && !order.isStockOrder) return false;
 
@@ -764,10 +878,13 @@ export default function KanbanPage() {
         ? order.account.name.toLowerCase()
         : "";
     const stockName = order.targetStockItem?.name?.toLowerCase() ?? "";
+    const notesMatch =
+      (order.workshopNotes?.toLowerCase().includes(q) ?? false) ||
+      (order.trackingNumber?.toLowerCase().includes(q) ?? false);
     const matchItems = (order.orderItems ?? []).some((it) =>
       it.productName.toLowerCase().includes(q),
     );
-    return matchId || accName.includes(q) || stockName.includes(q) || matchItems;
+    return matchId || accName.includes(q) || stockName.includes(q) || notesMatch || matchItems;
   });
 
   return (
@@ -907,14 +1024,27 @@ export default function KanbanPage() {
                 </button>
               </div>
 
-              <div className="relative w-full sm:w-64">
-                <input
-                  type="search"
-                  placeholder="Rechercher CMD #, client, support…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900/70 px-3.5 py-1.5 text-xs text-neutral-100 placeholder-neutral-500 focus:border-neutral-600 focus:outline-none"
-                />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHideCompleted((v) => !v)}
+                  className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    hideCompleted
+                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                      : "border-neutral-800 bg-neutral-900/50 text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  {hideCompleted ? "Terminées masquées" : "Masquer terminées"}
+                </button>
+                <div className="relative w-full sm:w-64">
+                  <input
+                    type="search"
+                    placeholder="Rechercher CMD #, client, support…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-neutral-800 bg-neutral-900/70 px-3.5 py-1.5 text-xs text-neutral-100 placeholder-neutral-500 focus:border-neutral-600 focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1080,6 +1210,22 @@ export default function KanbanPage() {
                                 </ul>
                               )}
 
+                              {(order.workshopNotes || order.trackingNumber) && (
+                                <div className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                                  {order.workshopNotes && (
+                                    <p className="line-clamp-2 rounded-md bg-neutral-950/60 px-2 py-1 text-neutral-300">
+                                      Note : {order.workshopNotes}
+                                    </p>
+                                  )}
+                                  {order.trackingNumber && (
+                                    <div className="flex items-center justify-between px-1 font-mono text-[10px] text-emerald-300">
+                                      <span>Suivi / Remise :</span>
+                                      <span>{order.trackingNumber}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
                               {/* Ligne 3 : Avancement d'étape */}
                               <div className="flex gap-1.5 pt-0.5">
                                 {col.id !== "pending" && (
@@ -1144,12 +1290,16 @@ export default function KanbanPage() {
           <ClientsView
             isAdmin={isAdmin}
             accounts={accounts}
+            users={users}
             properties={properties}
             zones={zones}
             nfcTags={nfcTags}
             onCreateAccount={createAccount}
             onUpdateAccount={updateAccount}
             onDeleteAccount={deleteAccount}
+            onCreateUser={createUser}
+            onUpdateUserPassword={updateUserPassword}
+            onDeleteUser={deleteUser}
             onCreateProperty={createProperty}
             onUpdateProperty={updateProperty}
             onDeleteProperty={deleteProperty}
@@ -1171,6 +1321,7 @@ export default function KanbanPage() {
             onCreateNfcTag={createNfcTag}
             onUpdateNfcTag={updateNfcTag}
             onDeleteNfcTag={deleteNfcTag}
+            onReplaceDefectiveNfcTag={replaceDefectiveNfcTag}
           />
         )}
 
@@ -1283,25 +1434,55 @@ export default function KanbanPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-medium text-neutral-300">
                   Lignes de la fiche (détail de la commande)
                 </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormItems((prev) => [
-                      ...prev,
-                      { productName: "Support Comptoir NFC Bois", quantity: 1 },
-                    ])
-                  }
-                  className="rounded border border-neutral-700 px-2 py-0.5 text-xs text-emerald-400 hover:bg-neutral-800"
-                >
-                  + Ajouter une ligne
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {!formIsStockOrder &&
+                    properties.filter((p) => p.account === formAccountIri).length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            prefillFromPropertyZones(e.target.value);
+                          }
+                        }}
+                        className="rounded-lg border border-neutral-700 bg-neutral-950 px-2 py-0.5 text-xs text-sky-300"
+                      >
+                        <option value="">Pré-remplir depuis les zones d&apos;un logement…</option>
+                        {properties
+                          .filter((p) => p.account === formAccountIri)
+                          .map((p) => {
+                            const zCount = zones.filter((z) => z.property === p["@id"]).length;
+                            return (
+                              <option
+                                key={p["@id"]}
+                                value={p["@id"]}
+                                disabled={zCount === 0}
+                              >
+                                {p.name} ({zCount} zone{zCount > 1 ? "s" : ""})
+                              </option>
+                            );
+                          })}
+                      </select>
+                    )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormItems((prev) => [
+                        ...prev,
+                        { productName: "Support Comptoir NFC Bois", quantity: 1 },
+                      ])
+                    }
+                    className="rounded-lg border border-neutral-700 px-2 py-0.5 text-xs text-emerald-400 hover:bg-neutral-800"
+                  >
+                    + Ajouter une ligne
+                  </button>
+                </div>
               </div>
 
-              <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
+              <div className="flex max-h-48 flex-col gap-2 overflow-y-auto pr-1">
                 {formItems.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <input
@@ -1315,7 +1496,7 @@ export default function KanbanPage() {
                           prev.map((it, i) => (i === idx ? { ...it, productName: val } : it)),
                         );
                       }}
-                      className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm"
+                      className="flex-1 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-sm"
                     />
                     <input
                       type="number"
@@ -1328,13 +1509,13 @@ export default function KanbanPage() {
                           prev.map((it, i) => (i === idx ? { ...it, quantity: val } : it)),
                         );
                       }}
-                      className="w-20 rounded border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-center font-mono text-sm"
+                      className="w-20 rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-center font-mono text-sm"
                     />
                     {formItems.length > 1 && (
                       <button
                         type="button"
                         onClick={() => setFormItems((prev) => prev.filter((_, i) => i !== idx))}
-                        className="rounded border border-neutral-800 px-2 py-1.5 text-xs text-rose-400 hover:bg-neutral-800"
+                        className="rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-rose-400 hover:bg-neutral-800"
                       >
                         ✕
                       </button>
@@ -1342,6 +1523,29 @@ export default function KanbanPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                Consignes atelier / gravure (optionnel)
+                <input
+                  type="text"
+                  placeholder="ex: Gravure logo chalet sur bois"
+                  value={formWorkshopNotes}
+                  onChange={(e) => setFormWorkshopNotes(e.target.value)}
+                  className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                Suivi d&apos;expédition / remise (optionnel)
+                <input
+                  type="text"
+                  placeholder="ex: Colissimo 6A12345678 ou Main propre"
+                  value={formTrackingNumber}
+                  onChange={(e) => setFormTrackingNumber(e.target.value)}
+                  className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 font-mono text-xs text-white"
+                />
+              </label>
             </div>
 
             <div className="flex justify-end gap-2 border-t border-neutral-800 pt-3">

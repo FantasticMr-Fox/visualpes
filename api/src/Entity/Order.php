@@ -13,6 +13,7 @@ use App\Repository\OrderRepository;
 use App\State\OrderStateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -80,6 +81,14 @@ class Order
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['order:read', 'order:write'])]
     private ?Account $account = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $workshopNotes = null;
+
+    #[ORM\Column(length: 120, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $trackingNumber = null;
 
     /**
      * @var Collection<int, OrderItem>
@@ -179,6 +188,30 @@ class Order
     public function setAccount(?Account $account): static
     {
         $this->account = $account;
+
+        return $this;
+    }
+
+    public function getWorkshopNotes(): ?string
+    {
+        return $this->workshopNotes;
+    }
+
+    public function setWorkshopNotes(?string $workshopNotes): static
+    {
+        $this->workshopNotes = $workshopNotes;
+
+        return $this;
+    }
+
+    public function getTrackingNumber(): ?string
+    {
+        return $this->trackingNumber;
+    }
+
+    public function setTrackingNumber(?string $trackingNumber): static
+    {
+        $this->trackingNumber = $trackingNumber;
 
         return $this;
     }

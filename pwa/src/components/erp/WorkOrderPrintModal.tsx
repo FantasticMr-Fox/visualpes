@@ -317,6 +317,32 @@ export function WorkOrderPrintModal({
           </div>
         </div>
 
+        {/* NOTES ATELIER / GRAVURE & SUIVI EXPÉDITION */}
+        {(order.workshopNotes || order.trackingNumber) && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {order.workshopNotes && (
+              <div className="rounded-xl border border-neutral-300 bg-neutral-50 p-3 text-xs">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                  Consignes Atelier & Gravure
+                </div>
+                <p className="mt-1 whitespace-pre-line font-medium text-neutral-900">
+                  {order.workshopNotes}
+                </p>
+              </div>
+            )}
+            {order.trackingNumber && (
+              <div className="rounded-xl border border-neutral-300 bg-neutral-50 p-3 text-xs">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                  Suivi Expédition / Remise
+                </div>
+                <p className="mt-1 font-mono font-bold text-neutral-900">
+                  {order.trackingNumber}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* LIGNES DE FABRICATION DÉTAILLÉES */}
         <div>
           <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-neutral-700">
