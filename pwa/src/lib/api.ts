@@ -56,7 +56,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(url, { ...init, headers });
+  const res = await fetch(url, { credentials: "include", ...init, headers });
   if (res.status === 401) {
     clearToken();
     throw new UnauthorizedError("Session expirée");

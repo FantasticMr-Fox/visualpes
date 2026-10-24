@@ -38,6 +38,7 @@ export default function KanbanPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [connected, setConnected] = useState<boolean>(false);
+  const [mercureTopic, setMercureTopic] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,14 +64,16 @@ export default function KanbanPage() {
     if (token === null) router.replace("/login");
   }, [token, router]);
 
-  // 1. Récupération initiale des commandes
+  // 1. Récupération initiale des commandes (et pose du cookie Mercure)
   useEffect(() => {
     if (!authReady) return;
     apiFetch(`${API_URL}/orders`)
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => {
+        const topic = res.headers.get("X-Mercure-Topic") ?? `${API_ORIGIN}/api/orders/{id}`;
+        const data = await res.json();
         const items = data?.member ?? data?.["hydra:member"] ?? (Array.isArray(data) ? data : []);
         setOrders(items);
+        setMercureTopic(topic);
       })
       .catch((err) => {
         if (err instanceof UnauthorizedError) return handleUnauthorized();
@@ -78,13 +81,13 @@ export default function KanbanPage() {
       });
   }, [authReady, handleUnauthorized]);
 
-  // 2. Abonnement temps réel Mercure SSE
+  // 2. Abonnement temps réel Mercure SSE (une fois le cookie posé par GET /api/orders)
   useEffect(() => {
-    if (!authReady) return;
+    if (!mercureTopic) return;
     const hubUrl = new URL(MERCURE_URL);
-    hubUrl.searchParams.append("topic", `${API_ORIGIN}/api/orders/{id}`);
+    hubUrl.searchParams.append("topic", mercureTopic);
 
-    const eventSource = new EventSource(hubUrl.toString());
+    const eventSource = new EventSource(hubUrl.toString(), { withCredentials: true });
 
     eventSource.onopen = () => setConnected(true);
     eventSource.onerror = () => setConnected(false);
@@ -109,7 +112,7 @@ export default function KanbanPage() {
     return () => {
       eventSource.close();
     };
-  }, [authReady]);
+  }, [mercureTopic]);
 
   // 3. Mutation de statut API
   const updateStatus = async (orderIri: string, newStatus: Order["status"]) => {

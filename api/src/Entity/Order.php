@@ -24,7 +24,13 @@ use Doctrine\ORM\Mapping as ORM;
         new Delete(security: "is_granted('ROLE_ADMIN')"),
     ],
     security: "is_granted('ROLE_USER')",
-    mercure: true,
+    mercure: [
+        'private' => true,
+        'topics' => [
+            '@=iri(object)',
+            '@=iri(object.getAccount()) ~ "/orders/" ~ object.getId()',
+        ],
+    ],
 )]
 class Order
 {

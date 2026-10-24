@@ -13,9 +13,7 @@
 		protocol_version_compatibility 8
 		publisher_jwt {$MERCURE_PUBLISHER_JWT_KEY:!ChangeThisMercureHubJWTSecretKey!}
 		subscriber_jwt {$MERCURE_SUBSCRIBER_JWT_KEY:!ChangeThisMercureHubJWTSecretKey!}
-		cors_origins *
-		publish_origins *
-		anonymous
+		cors_origins {$MERCURE_CORS_ORIGINS:http://localhost:3000 http://127.0.0.1:3000}
 		subscriptions
 	}
 
