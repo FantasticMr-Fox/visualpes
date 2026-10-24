@@ -533,6 +533,7 @@ export default function KanbanPage() {
         wifiSSID: string | null;
         wifiPassword: string | null;
         wifiProtectedByCode: boolean;
+        wifiQrPayload: string | null;
       };
     } catch (err) {
       if (err instanceof UnauthorizedError) {

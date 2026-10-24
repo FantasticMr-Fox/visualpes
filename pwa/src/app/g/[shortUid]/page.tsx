@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/api";
+import { WifiQrCodeSvg } from "@/components/common/WifiQrCodeSvg";
 
 interface PublicGuidePayload {
   shortUid: string;
@@ -224,6 +225,19 @@ export default function PublicGuidePage() {
                     </div>
                   </div>
                 </div>
+
+                {unlockedWifi.wifiQrPayload && (
+                  <div className="flex flex-col items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950/90 p-3.5">
+                    <WifiQrCodeSvg value={unlockedWifi.wifiQrPayload} size={176} />
+                    <span className="text-center text-[11px] text-neutral-400">
+                      Scannez ce QR Code avec l&apos;appareil photo pour rejoindre{" "}
+                      <strong className="font-mono text-neutral-200">
+                        {unlockedWifi.wifiSSID}
+                      </strong>{" "}
+                      automatiquement
+                    </span>
+                  </div>
+                )}
 
                 {unlockedWifi.wifiPassword && (
                   <button

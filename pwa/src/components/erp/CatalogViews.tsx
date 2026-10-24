@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { WifiQrCodeSvg } from "@/components/common/WifiQrCodeSvg";
 import type {
   AccountSummary,
   NfcTagItem,
@@ -50,6 +51,7 @@ interface ClientsViewProps {
     wifiSSID?: string | null;
     wifiPassword?: string | null;
     wifiAccessCode?: string | null;
+    wifiQrPayload?: string | null;
   } | null>;
   onCreateZone: (payload: {
     name: string;
@@ -109,8 +111,16 @@ export function ClientsView({
 
   // État de révélation temporaire du Wi-Fi déchiffré par propriété
   const [revealedWifi, setRevealedWifi] = useState<
-    Record<number, { wifiSSID?: string | null; wifiPassword?: string | null }>
+    Record<
+      number,
+      {
+        wifiSSID?: string | null;
+        wifiPassword?: string | null;
+        wifiQrPayload?: string | null;
+      }
+    >
   >({});
+  const [qrOpenPropIds, setQrOpenPropIds] = useState<Record<number, boolean>>({});
   const [copiedPropId, setCopiedPropId] = useState<number | null>(null);
 
   // Modale création / édition Zone d'une propriété
@@ -215,6 +225,24 @@ export function ClientsView({
     } catch {
       // Fallback silencieux
     }
+  };
+
+  const handleToggleWifiQr = async (propId: number) => {
+    if (qrOpenPropIds[propId]) {
+      setQrOpenPropIds((prev) => ({ ...prev, [propId]: false }));
+      return;
+    }
+
+    if (!revealedWifi[propId]?.wifiQrPayload) {
+      const res = await onRevealPropertyWifi(propId);
+      if (res) {
+        setRevealedWifi((prev) => ({ ...prev, [propId]: res }));
+      } else {
+        return;
+      }
+    }
+
+    setQrOpenPropIds((prev) => ({ ...prev, [propId]: true }));
   };
 
   const submitProperty = async (e: React.FormEvent) => {
@@ -534,10 +562,32 @@ export function ClientsView({
                               >
                                 {copiedPropId === prop.id ? "✓ Copié" : "Copier"}
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleWifiQr(prop.id)}
+                                className="rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/25"
+                              >
+                                {qrOpenPropIds[prop.id] ? "Fermer QR" : "QR Code"}
+                              </button>
                             </div>
                           )}
                         </div>
                       </div>
+
+                      {qrOpenPropIds[prop.id] && revealedWifi[prop.id]?.wifiQrPayload && (
+                        <div className="mt-2 flex flex-col items-center gap-2 rounded-xl border border-emerald-500/30 bg-neutral-900/90 p-3">
+                          <WifiQrCodeSvg
+                            value={revealedWifi[prop.id]!.wifiQrPayload!}
+                            size={156}
+                          />
+                          <div className="text-center text-[11px] text-neutral-300">
+                            Scannez avec l&apos;appareil photo pour rejoindre{" "}
+                            <strong className="font-mono text-white">
+                              {revealedWifi[prop.id]?.wifiSSID ?? prop.wifiSSID}
+                            </strong>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {prop.instructions && (

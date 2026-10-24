@@ -35,13 +35,24 @@ final class PropertyWifiController extends AbstractController
             ], Response::HTTP_FORBIDDEN);
         }
 
+        $ssid = $wifiCrypto->decrypt($property->getWifiSSID());
+        $password = $wifiCrypto->decrypt($property->getWifiPassword());
         $accessCode = $wifiCrypto->decrypt($property->getWifiAccessCode());
 
+        $qrPayload = null;
+        if (null !== $ssid && '' !== trim($ssid)) {
+            $escapedSsid = addcslashes($ssid, '\\;,"');
+            $escapedPass = addcslashes((string) $password, '\\;,"');
+            $authType = (null !== $password && '' !== $password) ? 'WPA' : 'nopass';
+            $qrPayload = \sprintf('WIFI:T:%s;S:%s;P:%s;;', $authType, $escapedSsid, $escapedPass);
+        }
+
         return $this->json([
-            'wifiSSID' => $wifiCrypto->decrypt($property->getWifiSSID()),
-            'wifiPassword' => $wifiCrypto->decrypt($property->getWifiPassword()),
+            'wifiSSID' => $ssid,
+            'wifiPassword' => $password,
             'wifiAccessCode' => $accessCode,
             'wifiProtectedByCode' => null !== $accessCode && '' !== trim($accessCode),
+            'wifiQrPayload' => $qrPayload,
         ]);
     }
 }
