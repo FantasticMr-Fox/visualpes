@@ -25,6 +25,11 @@ import type {
 import { Sidebar } from "@/components/erp/Sidebar";
 import { StocksView } from "@/components/erp/StocksView";
 import { ClientsView, NfcTagsView, SupportTicketsView } from "@/components/erp/CatalogViews";
+import {
+  WorkOrderPrintModal,
+  formatOrderBarcode,
+  parseScannedOrderId,
+} from "@/components/erp/WorkOrderPrintModal";
 
 const COLUMNS = [
   { id: "pending", title: "En attente", color: "border-amber-500/40 bg-amber-500/5 text-amber-400" },
@@ -85,6 +90,10 @@ export default function KanbanPage() {
   const [stockFormQty, setStockFormQty] = useState<number>(0);
   const [stockFormThreshold, setStockFormThreshold] = useState<number>(10);
   const [stockFormReorder, setStockFormReorder] = useState<number>(50);
+
+  // Modale Bon de Fabrication imprimable avec code-barres
+  const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
+  const printingOrder = orders.find((o) => o.id === printingOrderId) ?? null;
 
   const token = useSyncExternalStore<string | null | undefined>(subscribeToken, getToken, getServerToken);
   const authReady = typeof token === "string";
@@ -505,9 +514,10 @@ export default function KanbanPage() {
 
   const processHardwareScan = (code: string) => {
     setLastScanned(code);
-    const orderId = parseInt(code.replace(/\D/g, ""), 10);
-    const targetOrder = orders.find((o) => o.id === orderId);
+    const orderId = parseScannedOrderId(code);
+    if (orderId === null) return;
 
+    const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) return;
 
     const currentIndex = COLUMNS.findIndex((c) => c.id === targetOrder.status);
@@ -576,25 +586,27 @@ export default function KanbanPage() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-950 text-neutral-100 md:flex-row">
+    <div className="flex min-h-screen flex-col bg-neutral-950 text-neutral-100 print:bg-white print:text-black md:flex-row">
       {/* MENU LATÉRAL ERP */}
-      <Sidebar
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        isAdmin={isAdmin}
-        connected={connected}
-        lastScanned={lastScanned}
-        activeOrdersCount={activeOrdersCount}
-        lowStockCount={lowStockCount}
-        totalStockItemsCount={stockItems.length}
-        accountsCount={accounts.length}
-        nfcCount={nfcTags.length}
-        openTicketsCount={openTicketsCount}
-        onLogout={logout}
-      />
+      <div className="print:hidden">
+        <Sidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isAdmin={isAdmin}
+          connected={connected}
+          lastScanned={lastScanned}
+          activeOrdersCount={activeOrdersCount}
+          lowStockCount={lowStockCount}
+          totalStockItemsCount={stockItems.length}
+          accountsCount={accounts.length}
+          nfcCount={nfcTags.length}
+          openTicketsCount={openTicketsCount}
+          onLogout={logout}
+        />
+      </div>
 
       {/* ZONE DE CONTENU PRINCIPALE */}
-      <main className="flex-1 overflow-x-hidden p-6">
+      <main className="flex-1 overflow-x-hidden p-6 print:hidden">
         {(error ?? roleWarning) && (
           <div className="mb-5 flex items-center justify-between rounded-xl border border-rose-800/80 bg-rose-950/40 px-4 py-2.5 text-xs text-rose-200">
             <span>{error ?? roleWarning}</span>
@@ -814,30 +826,51 @@ export default function KanbanPage() {
                                       </span>
                                     )}
                                   </div>
-                                  <span className="text-[11px] text-neutral-400">
-                                    Créée le {new Date(order.createdAt).toLocaleDateString("fr-FR")}
-                                  </span>
-                                </div>
-
-                                {isAdmin && (
-                                  <div className="flex items-center gap-1">
+                                  <div className="mt-0.5 flex items-center gap-2">
+                                    <span className="text-[11px] text-neutral-400">
+                                      Créée le {new Date(order.createdAt).toLocaleDateString("fr-FR")}
+                                    </span>
                                     <button
                                       type="button"
-                                      onClick={() => openEditModal(order)}
-                                      className="rounded border border-neutral-700 bg-neutral-900/80 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                                      onClick={() => setPrintingOrderId(order.id)}
+                                      title="Ouvrir le bon de fabrication avec code-barres douchette"
+                                      className="inline-flex items-center gap-1 rounded border border-neutral-700 bg-neutral-950 px-1.5 py-0.2 font-mono text-[10px] text-neutral-300 hover:border-sky-500/50 hover:text-sky-300"
                                     >
-                                      Modifier
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => deleteOrder(order)}
-                                      title="Supprimer la fiche"
-                                      className="rounded border border-rose-900/60 bg-rose-950/40 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
-                                    >
-                                      Suppr.
+                                      <span>║▌║</span>
+                                      <span>{formatOrderBarcode(order.id)}</span>
                                     </button>
                                   </div>
-                                )}
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPrintingOrderId(order.id)}
+                                    title="Imprimer le bon de fabrication avec code-barres"
+                                    className="rounded border border-sky-800/70 bg-sky-950/40 px-2 py-0.5 text-[11px] font-medium text-sky-300 hover:bg-sky-900/50"
+                                  >
+                                    Bon
+                                  </button>
+                                  {isAdmin && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditModal(order)}
+                                        className="rounded border border-neutral-700 bg-neutral-900/80 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-800"
+                                      >
+                                        Modifier
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteOrder(order)}
+                                        title="Supprimer la fiche"
+                                        className="rounded border border-rose-900/60 bg-rose-950/40 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-900/50"
+                                      >
+                                        Suppr.
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
 
                               {/* Origine : Client OU Production Stock Interne */}
@@ -1253,6 +1286,13 @@ export default function KanbanPage() {
           </form>
         </div>
       )}
+
+      {/* MODALE BON DE FABRICATION IMPRIMABLE AVEC CODE-BARRES 1D (CODE 128B) */}
+      <WorkOrderPrintModal
+        order={printingOrder}
+        onClose={() => setPrintingOrderId(null)}
+        onSimulateScan={(code) => processHardwareScan(code)}
+      />
     </div>
   );
 }
