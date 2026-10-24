@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
@@ -9,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\PropertyRepository;
+use App\State\PropertyStateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
@@ -19,8 +21,14 @@ use Doctrine\ORM\Mapping as ORM;
     operations: [
         new GetCollection(),
         new Get(),
-        new Post(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()"),
-        new Patch(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()"),
+        new Post(
+            securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()",
+            processor: PropertyStateProcessor::class,
+        ),
+        new Patch(
+            securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()",
+            processor: PropertyStateProcessor::class,
+        ),
         new Delete(),
     ],
     security: "is_granted('ROLE_USER')",
@@ -34,7 +42,6 @@ class Property
 
     #[ORM\Column(length: 255)]
     private ?string $name = null;
-
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $externalGuideUrl = null;
@@ -52,11 +59,16 @@ class Property
     #[ORM\OneToMany(targetEntity: Zone::class, mappedBy: 'property', orphanRemoval: true)]
     private Collection $zones;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    #[ORM\Column(length: 512, nullable: true)]
     private ?string $wifiSSID = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    #[ORM\Column(length: 512, nullable: true)]
+    #[ApiProperty(readable: false, writable: true)]
     private ?string $wifiPassword = null;
+
+    #[ORM\Column(length: 512, nullable: true)]
+    #[ApiProperty(readable: false, writable: true)]
+    private ?string $wifiAccessCode = null;
 
     public function __construct()
     {
@@ -137,7 +149,6 @@ class Property
     public function removeZone(Zone $zone): static
     {
         if ($this->zones->removeElement($zone)) {
-            // set the owning side to null (unless already changed)
             if ($zone->getProperty() === $this) {
                 $zone->setProperty(null);
             }
@@ -166,6 +177,18 @@ class Property
     public function setWifiPassword(?string $wifiPassword): static
     {
         $this->wifiPassword = $wifiPassword;
+
+        return $this;
+    }
+
+    public function getWifiAccessCode(): ?string
+    {
+        return $this->wifiAccessCode;
+    }
+
+    public function setWifiAccessCode(?string $wifiAccessCode): static
+    {
+        $this->wifiAccessCode = $wifiAccessCode;
 
         return $this;
     }

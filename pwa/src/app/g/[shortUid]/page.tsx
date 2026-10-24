@@ -19,11 +19,19 @@ interface PublicGuidePayload {
   property?: {
     id: number;
     name: string;
-    wifiSSID?: string | null;
-    wifiPassword?: string | null;
+    wifiConfigured?: boolean;
+    wifiProtectedByCode?: boolean;
+    wifiSsidMasked?: string | null;
     externalGuideUrl?: string | null;
     instructions?: string | null;
   } | null;
+  error?: string;
+}
+
+interface UnlockedWifiPayload {
+  wifiSSID: string | null;
+  wifiPassword: string | null;
+  wifiQrPayload: string | null;
   error?: string;
 }
 
@@ -34,6 +42,13 @@ export default function PublicGuidePage() {
   const [data, setData] = useState<PublicGuidePayload | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [notFoundError, setNotFoundError] = useState<string | null>(null);
+
+  // État de déverrouillage Wi-Fi à la demande
+  const [accessCode, setAccessCode] = useState<string>("");
+  const [unlockingWifi, setUnlockingWifi] = useState<boolean>(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlockedWifi, setUnlockedWifi] = useState<UnlockedWifiPayload | null>(null);
+  const [showWifiPassword, setShowWifiPassword] = useState<boolean>(false);
   const [copiedWifi, setCopiedWifi] = useState<boolean>(false);
 
   useEffect(() => {
@@ -55,8 +70,40 @@ export default function PublicGuidePage() {
       .finally(() => setLoading(false));
   }, [shortUid]);
 
+  const handleUnlockWifi = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!shortUid) return;
+
+    setUnlockingWifi(true);
+    setUnlockError(null);
+    try {
+      const res = await fetch(
+        `${API_URL}/public/guide/${encodeURIComponent(shortUid)}/unlock-wifi`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ accessCode: accessCode.trim() }),
+        },
+      );
+      const body = (await res.json()) as UnlockedWifiPayload;
+      if (!res.ok) {
+        setUnlockError(body.error ?? "Impossible de déverrouiller le Wi-Fi.");
+      } else {
+        setUnlockedWifi(body);
+        setShowWifiPassword(false);
+      }
+    } catch {
+      setUnlockError("Erreur réseau lors du déverrouillage Wi-Fi.");
+    } finally {
+      setUnlockingWifi(false);
+    }
+  };
+
   const copyWifiPassword = async () => {
-    const pass = data?.property?.wifiPassword;
+    const pass = unlockedWifi?.wifiPassword;
     if (!pass) return;
     try {
       await navigator.clipboard.writeText(pass);
@@ -134,46 +181,104 @@ export default function PublicGuidePage() {
           </div>
         )}
 
-        {/* Carte Wi-Fi 1 clic */}
+        {/* Carte Wi-Fi sécurisée */}
         <div className="flex flex-col gap-3 rounded-2xl border border-sky-500/30 bg-sky-950/20 p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-sky-300">
               Connexion Wi-Fi du logement
             </span>
-            <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
-              Accès rapide
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+              {unlockedWifi ? "Déverrouillé" : "Accès sécurisé"}
             </span>
           </div>
 
-          {prop?.wifiSSID ? (
-            <>
-              <div className="grid grid-cols-1 gap-2 rounded-xl border border-neutral-800 bg-neutral-950/80 p-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Réseau (SSID)</span>
-                  <span className="font-mono text-sm font-bold text-white">
-                    {prop.wifiSSID}
-                  </span>
+          {prop?.wifiConfigured ? (
+            unlockedWifi ? (
+              <>
+                <div className="grid grid-cols-1 gap-2 rounded-xl border border-neutral-800 bg-neutral-950/80 p-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-400">Réseau (SSID)</span>
+                    <span className="font-mono text-sm font-bold text-white">
+                      {unlockedWifi.wifiSSID}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-neutral-800/80 pt-2">
+                    <span className="text-neutral-400">Mot de passe</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-bold text-emerald-300">
+                        {unlockedWifi.wifiPassword
+                          ? showWifiPassword
+                            ? unlockedWifi.wifiPassword
+                            : "••••••••••••"
+                          : "Accès libre"}
+                      </span>
+                      {unlockedWifi.wifiPassword && (
+                        <button
+                          type="button"
+                          onClick={() => setShowWifiPassword((prev) => !prev)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-neutral-300 hover:bg-neutral-800"
+                        >
+                          {showWifiPassword ? "Masquer" : "Afficher"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between border-t border-neutral-800/80 pt-2">
-                  <span className="text-neutral-400">Mot de passe</span>
-                  <span className="font-mono text-sm font-bold text-emerald-300">
-                    {prop.wifiPassword || "Accès libre"}
-                  </span>
-                </div>
-              </div>
 
-              {prop.wifiPassword && (
+                {unlockedWifi.wifiPassword && (
+                  <button
+                    type="button"
+                    onClick={() => void copyWifiPassword()}
+                    className="w-full rounded-xl bg-sky-500 py-2.5 text-xs font-bold text-neutral-950 transition-colors hover:bg-sky-400"
+                  >
+                    {copiedWifi
+                      ? "✓ Mot de passe Wi-Fi copié !"
+                      : "Copier le mot de passe Wi-Fi"}
+                  </button>
+                )}
+              </>
+            ) : (
+              <form onSubmit={(e) => void handleUnlockWifi(e)} className="flex flex-col gap-3">
+                <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-950/80 px-3 py-2.5 text-xs">
+                  <span className="text-neutral-400">Réseau détecté</span>
+                  <span className="font-mono font-bold text-neutral-200">
+                    {prop.wifiSsidMasked ?? "Réseau protégé"}
+                  </span>
+                </div>
+
+                {prop.wifiProtectedByCode && (
+                  <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                    Code d&apos;accès séjour (communiqué par votre hôte)
+                    <input
+                      type="password"
+                      required
+                      value={accessCode}
+                      onChange={(e) => setAccessCode(e.target.value)}
+                      placeholder="Ex: 7380"
+                      className="rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-center font-mono text-sm tracking-widest text-white focus:border-sky-400 focus:outline-none"
+                    />
+                  </label>
+                )}
+
+                {unlockError && (
+                  <p className="rounded-lg border border-rose-500/40 bg-rose-950/40 px-3 py-1.5 text-xs text-rose-300">
+                    {unlockError}
+                  </p>
+                )}
+
                 <button
-                  type="button"
-                  onClick={copyWifiPassword}
-                  className="w-full rounded-xl bg-sky-500 py-2.5 text-xs font-bold text-neutral-950 transition-colors hover:bg-sky-400"
+                  type="submit"
+                  disabled={unlockingWifi}
+                  className="w-full rounded-xl bg-sky-500 py-2.5 text-xs font-bold text-neutral-950 transition-colors hover:bg-sky-400 disabled:opacity-50"
                 >
-                  {copiedWifi
-                    ? "✓ Mot de passe Wi-Fi copié !"
-                    : "Copier le mot de passe Wi-Fi"}
+                  {unlockingWifi
+                    ? "Déverrouillage sécurisé…"
+                    : prop.wifiProtectedByCode
+                      ? "Déverrouiller et afficher le Wi-Fi"
+                      : "Accéder aux identifiants Wi-Fi"}
                 </button>
-              )}
-            </>
+              </form>
+            )
           ) : (
             <p className="text-xs text-neutral-400">
               Aucun identifiant Wi-Fi configuré sur cette propriété pour le moment.
@@ -213,4 +318,3 @@ export default function PublicGuidePage() {
     </main>
   );
 }
-

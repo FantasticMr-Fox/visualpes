@@ -485,6 +485,7 @@ export default function KanbanPage() {
     account: string;
     wifiSSID?: string;
     wifiPassword?: string;
+    wifiAccessCode?: string;
     externalGuideUrl?: string;
     instructions?: string;
   }) => {
@@ -503,6 +504,7 @@ export default function KanbanPage() {
       account: string;
       wifiSSID?: string | null;
       wifiPassword?: string | null;
+      wifiAccessCode?: string | null;
       externalGuideUrl?: string | null;
       instructions?: string | null;
     },
@@ -513,6 +515,31 @@ export default function KanbanPage() {
       body: JSON.stringify(payload),
     });
     if (res.ok) await refreshAllData();
+  };
+
+  const revealPropertyWifi = async (propertyId: number) => {
+    try {
+      const res = await apiFetch(`${API_URL}/properties/${propertyId}/reveal-wifi`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(errBody.error ?? "Impossible de révéler les identifiants Wi-Fi.");
+        return null;
+      }
+      return (await res.json()) as {
+        wifiSSID: string | null;
+        wifiPassword: string | null;
+        wifiProtectedByCode: boolean;
+      };
+    } catch (err) {
+      if (err instanceof UnauthorizedError) {
+        handleUnauthorized();
+      }
+      return null;
+    }
   };
 
   const deleteProperty = async (propertyIri: string) => {
@@ -1214,6 +1241,7 @@ export default function KanbanPage() {
             onCreateProperty={createProperty}
             onUpdateProperty={updateProperty}
             onDeleteProperty={deleteProperty}
+            onRevealPropertyWifi={revealPropertyWifi}
             onCreateZone={createZone}
             onUpdateZone={updateZone}
             onDeleteZone={deleteZone}

@@ -27,6 +27,7 @@ interface ClientsViewProps {
     account: string;
     wifiSSID?: string;
     wifiPassword?: string;
+    wifiAccessCode?: string;
     externalGuideUrl?: string;
     instructions?: string;
   }) => Promise<void>;
@@ -37,11 +38,19 @@ interface ClientsViewProps {
       account: string;
       wifiSSID?: string | null;
       wifiPassword?: string | null;
+      wifiAccessCode?: string | null;
       externalGuideUrl?: string | null;
       instructions?: string | null;
     },
   ) => Promise<void>;
   onDeleteProperty: (propertyIri: string) => Promise<void>;
+  onRevealPropertyWifi: (
+    propertyId: number,
+  ) => Promise<{
+    wifiSSID?: string | null;
+    wifiPassword?: string | null;
+    wifiAccessCode?: string | null;
+  } | null>;
   onCreateZone: (payload: {
     name: string;
     mountType: string;
@@ -69,6 +78,7 @@ export function ClientsView({
   onCreateProperty,
   onUpdateProperty,
   onDeleteProperty,
+  onRevealPropertyWifi,
   onCreateZone,
   onUpdateZone,
   onDeleteZone,
@@ -90,9 +100,18 @@ export function ClientsView({
   const [propAccount, setPropAccount] = useState(accounts[0]?.["@id"] ?? "/api/accounts/1");
   const [propWifiSsid, setPropWifiSsid] = useState("");
   const [propWifiPass, setPropWifiPass] = useState("");
+  const [propWifiAccessCode, setPropWifiAccessCode] = useState("");
+  const [clearAccessCode, setClearAccessCode] = useState(false);
+  const [showPassInput, setShowPassInput] = useState(false);
   const [propGuideUrl, setPropGuideUrl] = useState("");
   const [propInstructions, setPropInstructions] = useState("");
   const [savingProp, setSavingProp] = useState(false);
+
+  // État de révélation temporaire du Wi-Fi déchiffré par propriété
+  const [revealedWifi, setRevealedWifi] = useState<
+    Record<number, { wifiSSID?: string | null; wifiPassword?: string | null }>
+  >({});
+  const [copiedPropId, setCopiedPropId] = useState<number | null>(null);
 
   // Modale création / édition Zone d'une propriété
   const [zoneModal, setZoneModal] = useState(false);
@@ -147,6 +166,9 @@ export function ClientsView({
     );
     setPropWifiSsid("");
     setPropWifiPass("");
+    setPropWifiAccessCode("");
+    setClearAccessCode(false);
+    setShowPassInput(false);
     setPropGuideUrl("");
     setPropInstructions("");
     setPropModal(true);
@@ -157,10 +179,42 @@ export function ClientsView({
     setPropName(prop.name);
     setPropAccount(prop.account);
     setPropWifiSsid(prop.wifiSSID ?? "");
-    setPropWifiPass(prop.wifiPassword ?? "");
+    // Le mot de passe Wi-Fi existant n'est jamais pré-rempli en clair : laissé vide = conservé intact
+    setPropWifiPass("");
+    setPropWifiAccessCode("");
+    setClearAccessCode(false);
+    setShowPassInput(false);
     setPropGuideUrl(prop.externalGuideUrl ?? "");
     setPropInstructions(prop.instructions ?? "");
     setPropModal(true);
+  };
+
+  const handleToggleRevealWifi = async (propId: number) => {
+    if (revealedWifi[propId]) {
+      setRevealedWifi((prev) => {
+        const next = { ...prev };
+        delete next[propId];
+        return next;
+      });
+      return;
+    }
+
+    const res = await onRevealPropertyWifi(propId);
+    if (res) {
+      setRevealedWifi((prev) => ({ ...prev, [propId]: res }));
+    }
+  };
+
+  const handleCopyWifiPassword = async (propId: number) => {
+    const current = revealedWifi[propId] ?? (await onRevealPropertyWifi(propId));
+    if (!current?.wifiPassword) return;
+    try {
+      await navigator.clipboard.writeText(current.wifiPassword);
+      setCopiedPropId(propId);
+      setTimeout(() => setCopiedPropId((prev) => (prev === propId ? null : prev)), 2500);
+    } catch {
+      // Fallback silencieux
+    }
   };
 
   const submitProperty = async (e: React.FormEvent) => {
@@ -173,7 +227,12 @@ export function ClientsView({
           name: propName.trim(),
           account: targetAccount,
           wifiSSID: propWifiSsid.trim() || null,
-          wifiPassword: propWifiPass.trim() || null,
+          wifiPassword: propWifiPass.trim() ? propWifiPass : null,
+          wifiAccessCode: clearAccessCode
+            ? "CLEAR"
+            : propWifiAccessCode.trim()
+              ? propWifiAccessCode.trim()
+              : null,
           externalGuideUrl: propGuideUrl.trim() || null,
           instructions: propInstructions.trim() || null,
         });
@@ -183,6 +242,7 @@ export function ClientsView({
           account: targetAccount,
           wifiSSID: propWifiSsid.trim() || undefined,
           wifiPassword: propWifiPass.trim() || undefined,
+          wifiAccessCode: propWifiAccessCode.trim() || undefined,
           externalGuideUrl: propGuideUrl.trim() || undefined,
           instructions: propInstructions.trim() || undefined,
         });
@@ -416,18 +476,66 @@ export function ClientsView({
                       </div>
                     </div>
 
-                    {/* Wi-Fi & Guide */}
-                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-800/80 bg-neutral-950/60 p-3 text-xs">
-                      <div>
-                        <span className="text-neutral-500">Wi-Fi SSID :</span>
-                        <div className="font-mono font-medium text-neutral-200">
-                          {prop.wifiSSID || "Non renseigné"}
+                    {/* Wi-Fi sécurisé (chiffré AES-256-GCM en base & masqué par défaut) */}
+                    <div className="flex flex-col gap-2 rounded-lg border border-neutral-800/80 bg-neutral-950/60 p-3 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-neutral-800/70 pb-2">
+                        <span className="font-semibold text-neutral-300">
+                          Accès Wi-Fi du logement
+                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 font-mono text-[10px] text-emerald-300">
+                            AES-256-GCM
+                          </span>
+                          {prop.wifiProtectedByCode && (
+                            <span className="rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.2 font-mono text-[10px] text-amber-300">
+                              PIN Voyageur actif
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div>
-                        <span className="text-neutral-500">Clé Wi-Fi :</span>
-                        <div className="font-mono font-medium text-emerald-300">
-                          {prop.wifiPassword || "—"}
+
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div>
+                          <span className="text-neutral-500">Wi-Fi SSID :</span>
+                          <div className="font-mono font-medium text-neutral-200">
+                            {revealedWifi[prop.id]?.wifiSSID ??
+                              prop.wifiSSID ??
+                              "Non renseigné"}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-neutral-500">Clé Wi-Fi :</span>
+                          {!prop.wifiConfigured ? (
+                            <div className="font-mono text-neutral-500">Non configurée</div>
+                          ) : prop.canManageWifi === false ? (
+                            <div
+                              title="Seul le client propriétaire du compte peut déchiffrer son mot de passe Wi-Fi"
+                              className="font-mono text-[11px] text-amber-300/90"
+                            >
+                              Confidentiel Client (masqué atelier)
+                            </div>
+                          ) : (
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              <span className="font-mono font-bold text-emerald-300">
+                                {revealedWifi[prop.id]?.wifiPassword ?? "••••••••••••"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRevealWifi(prop.id)}
+                                className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-800"
+                              >
+                                {revealedWifi[prop.id] ? "Masquer" : "Afficher"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyWifiPassword(prop.id)}
+                                className="rounded border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300 hover:bg-sky-500/25"
+                              >
+                                {copiedPropId === prop.id ? "✓ Copié" : "Copier"}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -699,26 +807,84 @@ export function ClientsView({
                 className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-1 text-xs text-neutral-300">
-                Wi-Fi SSID
-                <input
-                  type="text"
-                  value={propWifiSsid}
-                  onChange={(e) => setPropWifiSsid(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-neutral-300">
-                Mot de passe Wi-Fi
-                <input
-                  type="text"
-                  value={propWifiPass}
-                  onChange={(e) => setPropWifiPass(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm"
-                />
-              </label>
-            </div>
+            {editingProperty && editingProperty.canManageWifi === false ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-200">
+                Les identifiants Wi-Fi de ce logement sont chiffrés et gérés exclusivement par le client propriétaire du compte.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-neutral-200">
+                    Identifiants Wi-Fi (chiffrés AES-256-GCM en base)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassInput((v) => !v)}
+                    className="text-[11px] text-sky-400 hover:underline"
+                  >
+                    {showPassInput ? "Masquer la saisie" : "Afficher la saisie"}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                    Wi-Fi SSID
+                    <input
+                      type="text"
+                      value={propWifiSsid}
+                      onChange={(e) => setPropWifiSsid(e.target.value)}
+                      placeholder="ex: Chalet_Flocon_5G"
+                      className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 font-mono text-sm"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                    Mot de passe Wi-Fi
+                    <input
+                      type={showPassInput ? "text" : "password"}
+                      value={propWifiPass}
+                      onChange={(e) => setPropWifiPass(e.target.value)}
+                      placeholder={
+                        editingProperty?.wifiConfigured
+                          ? "•••••••• (vide = conserver)"
+                          : "Clé WPA2/WPA3"
+                      }
+                      className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 font-mono text-sm"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col gap-1 border-t border-neutral-800/80 pt-2 text-xs text-neutral-300">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      Code PIN Voyageur optionnel (demandé sur `/g/[shortUid]` avant de révéler le Wi-Fi)
+                    </span>
+                    {editingProperty?.wifiProtectedByCode && (
+                      <label className="flex items-center gap-1 text-[11px] text-rose-300">
+                        <input
+                          type="checkbox"
+                          checked={clearAccessCode}
+                          onChange={(e) => setClearAccessCode(e.target.checked)}
+                        />
+                        Désactiver le PIN
+                      </label>
+                    )}
+                  </div>
+                  {!clearAccessCode && (
+                    <input
+                      type={showPassInput ? "text" : "password"}
+                      value={propWifiAccessCode}
+                      onChange={(e) => setPropWifiAccessCode(e.target.value)}
+                      placeholder={
+                        editingProperty?.wifiProtectedByCode
+                          ? "PIN actif (laisser vide pour conserver, ou saisir un nouveau PIN)"
+                          : "Optionnel — ex: 2048 (4 derniers chiffres boîte à clés)"
+                      }
+                      className="rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 font-mono text-xs"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               URL du livret d&apos;accueil externe
               <input

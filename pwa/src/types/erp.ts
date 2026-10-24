@@ -67,7 +67,12 @@ export interface PropertyItem {
   externalGuideUrl?: string | null;
   instructions?: string | null;
   wifiSSID?: string | null;
+  wifiSsidMasked?: string | null;
   wifiPassword?: string | null;
+  wifiAccessCode?: string | null;
+  wifiConfigured?: boolean;
+  wifiProtectedByCode?: boolean;
+  canManageWifi?: boolean;
   account: string;
   zones?: string[];
 }
