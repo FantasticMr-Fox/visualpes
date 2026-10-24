@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
@@ -11,6 +12,7 @@ use ApiPlatform\Metadata\Post;
 use App\Repository\SupportTicketRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: SupportTicketRepository::class)]
 #[ApiResource(
@@ -25,24 +27,46 @@ use Doctrine\ORM\Mapping as ORM;
 )]
 class SupportTicket
 {
+    public const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Assert\NotBlank]
     private ?string $subject = null;
 
     #[ORM\Column(type: Types::TEXT)]
+    #[Assert\NotBlank]
     private ?string $message = null;
 
     #[ORM\Column(length: 50)]
-    private ?string $status = null;
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: self::STATUSES)]
+    #[ApiProperty(
+        default: 'open',
+        securityPostDenormalize: "is_granted('ROLE_ADMIN')",
+        extraProperties: ['throw_on_access_denied' => true],
+    )]
+    private ?string $status = 'open';
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[ApiProperty(
+        security: "is_granted('ROLE_ADMIN')",
+        securityPostDenormalize: "is_granted('ROLE_ADMIN')",
+        extraProperties: ['throw_on_access_denied' => true],
+    )]
     private ?string $aiDraft = null;
 
     #[ORM\Column(nullable: true)]
+    #[Assert\Range(min: 0, max: 1)]
+    #[ApiProperty(
+        security: "is_granted('ROLE_ADMIN')",
+        securityPostDenormalize: "is_granted('ROLE_ADMIN')",
+        extraProperties: ['throw_on_access_denied' => true],
+    )]
     private ?float $aiConfidence = null;
 
     #[ORM\ManyToOne(inversedBy: 'supportTickets')]

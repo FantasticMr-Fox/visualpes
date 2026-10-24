@@ -10,8 +10,11 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\NfcTagRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: NfcTagRepository::class)]
+#[UniqueEntity(fields: ['shortUid'])]
 #[ApiResource(
     operations: [
         new GetCollection(),
@@ -24,19 +27,33 @@ use Doctrine\ORM\Mapping as ORM;
 )]
 class NfcTag
 {
+    public const STATUSES = ['stock', 'encoded', 'assigned', 'defective'];
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
 
     #[ORM\Column(length: 10, unique: true)]
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 10)]
     private ?string $shortUid = null;
 
     #[ORM\Column(length: 20)]
-    private ?string $status = null;
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: self::STATUSES)]
+    private ?string $status = 'stock';
 
     #[ORM\Column(nullable: true)]
     private ?\DateTime $encodeAt = null;
+
+    #[ORM\ManyToOne(inversedBy: 'nfcTags')]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Zone $zone = null;
+
+    #[ORM\ManyToOne(inversedBy: 'nfcTags')]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?OrderItem $orderItem = null;
 
     public function getId(): ?int
     {
@@ -75,6 +92,30 @@ class NfcTag
     public function setEncodeAt(?\DateTime $encodeAt): static
     {
         $this->encodeAt = $encodeAt;
+
+        return $this;
+    }
+
+    public function getZone(): ?Zone
+    {
+        return $this->zone;
+    }
+
+    public function setZone(?Zone $zone): static
+    {
+        $this->zone = $zone;
+
+        return $this;
+    }
+
+    public function getOrderItem(): ?OrderItem
+    {
+        return $this->orderItem;
+    }
+
+    public function setOrderItem(?OrderItem $orderItem): static
+    {
+        $this->orderItem = $orderItem;
 
         return $this;
     }
