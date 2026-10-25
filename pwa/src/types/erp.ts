@@ -51,6 +51,7 @@ export interface Order {
   account?: AccountSummary | string | null;
   workshopNotes?: string | null;
   trackingNumber?: string | null;
+  storeReference?: string | null;
   orderItems?: OrderItem[];
 }
 
@@ -97,13 +98,24 @@ export interface NfcTagItem {
   orderItem?: string | null;
 }
 
+export type SupportIssueType =
+  | "nfc_defect"
+  | "wifi_issue"
+  | "guide_update"
+  | "billing"
+  | "other";
+
 export interface SupportTicketItem {
   "@id": string;
   id: number;
   subject: string;
   message: string;
   status: "open" | "in_progress" | "resolved" | "closed";
+  issueType?: SupportIssueType;
+  isAiResolved?: boolean;
   aiDraft?: string | null;
   aiConfidence?: number | null;
   account: string;
+  property?: string | null;
+  nfcTag?: string | null;
 }

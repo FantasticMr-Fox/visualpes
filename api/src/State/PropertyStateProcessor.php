@@ -4,6 +4,7 @@ namespace App\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\AI\RagConciergeService;
 use App\Entity\Property;
 use App\Entity\User;
 use App\Security\WifiCredentialCrypto;
@@ -14,7 +15,8 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 /**
  * Chiffre au repos (AES-256-GCM) le SSID, le mot de passe Wi-Fi et le code d'accès
  * d'une propriété, préserve le mot de passe existant s'il est laissé vide à l'édition,
- * et interdit au staff atelier (hors propriétaire du compte) d'écraser le Wi-Fi d'un client.
+ * interdit au staff atelier (hors propriétaire du compte) d'écraser le Wi-Fi d'un client,
+ * et recalcule le vecteur d'embedding RAG des instructions (`instructionsVector`).
  *
  * @implements ProcessorInterface<Property, Property>
  */
@@ -27,6 +29,7 @@ final readonly class PropertyStateProcessor implements ProcessorInterface
         #[Autowire(service: 'api_platform.doctrine.orm.state.persist_processor')]
         private ProcessorInterface $persistProcessor,
         private WifiCredentialCrypto $wifiCrypto,
+        private RagConciergeService $ragConcierge,
         private Security $security,
     ) {
     }
@@ -70,6 +73,7 @@ final readonly class PropertyStateProcessor implements ProcessorInterface
                 $data->setWifiSSID($previous->getWifiSSID());
                 $data->setWifiPassword($previous->getWifiPassword());
                 $data->setWifiAccessCode($previous->getWifiAccessCode());
+                $this->ragConcierge->vectorizeProperty($data);
 
                 return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
             }
@@ -116,6 +120,8 @@ final readonly class PropertyStateProcessor implements ProcessorInterface
                 $data->setWifiAccessCode(null);
             }
         }
+
+        $this->ragConcierge->vectorizeProperty($data);
 
         return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
     }

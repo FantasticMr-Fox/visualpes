@@ -2,10 +2,16 @@
 
 namespace App\Controller;
 
+use App\AI\RagConciergeService;
+use App\Entity\Account;
 use App\Entity\NfcTag;
 use App\Entity\Property;
+use App\Entity\SupportTicket;
+use App\Entity\Zone;
 use App\Repository\NfcTagRepository;
+use App\Repository\PropertyRepository;
 use App\Security\WifiCredentialCrypto;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -37,6 +43,7 @@ final class PublicGuideController extends AbstractController
         return $this->json([
             'shortUid' => $tag->getShortUid(),
             'status' => $tag->getStatus(),
+            'needsPairing' => null === $zone && null === $property,
             'encodeAt' => $tag->getEncodeAt()?->format(\DateTimeInterface::ATOM),
             'productName' => $orderItem?->getProductName(),
             'orderId' => $orderItem?->getParentOrder()?->getId(),
@@ -102,6 +109,246 @@ final class PublicGuideController extends AbstractController
             'wifiSSID' => $ssid,
             'wifiPassword' => $password,
             'wifiQrPayload' => $qrPayload,
+        ]);
+    }
+
+    #[Route('/api/public/guide/{shortUid}/ask', name: 'api_public_guide_ask', methods: ['POST'])]
+    public function askConcierge(
+        string $shortUid,
+        Request $request,
+        NfcTagRepository $nfcTagRepository,
+        RagConciergeService $ragConcierge,
+    ): JsonResponse {
+        [$tag, $errorResponse] = $this->resolveActiveTag($shortUid, $nfcTagRepository);
+        if (null !== $errorResponse) {
+            return $errorResponse;
+        }
+
+        $property = $this->resolveProperty($tag);
+        if (null === $property) {
+            return $this->json(['error' => 'Aucune propriété configurée sur ce support NFC.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $payload = json_decode($request->getContent() ?: '{}', true);
+        $question = \is_array($payload) ? trim((string) ($payload['question'] ?? '')) : '';
+
+        if ('' === $question) {
+            return $this->json(['error' => 'Veuillez saisir une question pour le Concierge Virtuel.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $result = $ragConcierge->answerGuestQuestion($property, $tag->getZone(), $question);
+
+        return $this->json([
+            'shortUid' => $tag->getShortUid(),
+            'propertyName' => $property->getName(),
+            'question' => $question,
+            'answer' => $result['answer'],
+            'confidence' => $result['confidence'],
+            'matchedExcerpts' => $result['matchedExcerpts'],
+            'suggestWifiCard' => $result['suggestWifiCard'],
+        ]);
+    }
+
+    #[Route('/api/public/guide/{shortUid}/report-issue', name: 'api_public_guide_report_issue', methods: ['POST'])]
+    public function reportIssue(
+        string $shortUid,
+        Request $request,
+        NfcTagRepository $nfcTagRepository,
+        RagConciergeService $ragConcierge,
+        EntityManagerInterface $entityManager,
+    ): JsonResponse {
+        [$tag, $errorResponse] = $this->resolveActiveTag($shortUid, $nfcTagRepository);
+        if (null !== $errorResponse) {
+            return $errorResponse;
+        }
+
+        $property = $this->resolveProperty($tag);
+        $account = $property?->getAccount() ?? $tag->getOrderItem()?->getParentOrder()?->getAccount();
+        if (null === $account) {
+            return $this->json(['error' => 'Aucun compte rattaché à ce support NFC.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $payload = json_decode($request->getContent() ?: '{}', true);
+        $subject = \is_array($payload) ? trim((string) ($payload['subject'] ?? '')) : '';
+        $message = \is_array($payload) ? trim((string) ($payload['message'] ?? '')) : '';
+        $issueType = \is_array($payload) ? trim((string) ($payload['issueType'] ?? 'other')) : 'other';
+
+        if ('' === $subject || '' === $message) {
+            return $this->json(['error' => 'Le sujet et la description du signalement sont requis.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $ticket = new SupportTicket();
+        $ticket->setAccount($account);
+        $ticket->setProperty($property);
+        $ticket->setNfcTag($tag);
+        $ticket->setSubject($subject);
+        $ticket->setMessage($message);
+        if (\in_array($issueType, SupportTicket::ISSUE_TYPES, true)) {
+            $ticket->setIssueType($issueType);
+        }
+
+        $triage = $ragConcierge->triageSupportTicket($ticket);
+        $ticket->setIssueType($triage['issueType']);
+        $ticket->setAiDraft($triage['aiDraft']);
+        $ticket->setAiConfidence($triage['aiConfidence']);
+
+        $entityManager->persist($ticket);
+        $entityManager->flush();
+
+        return $this->json([
+            'id' => $ticket->getId(),
+            'status' => $ticket->getStatus(),
+            'issueType' => $ticket->getIssueType(),
+            'aiConfidence' => $ticket->getAiConfidence(),
+        ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/public/tap/{shortUid}', name: 'api_public_tap_inspect', methods: ['GET'])]
+    public function inspectTap(
+        string $shortUid,
+        NfcTagRepository $nfcTagRepository,
+    ): JsonResponse {
+        [$tag, $errorResponse] = $this->resolveActiveTag($shortUid, $nfcTagRepository);
+        if (null !== $errorResponse) {
+            return $errorResponse;
+        }
+
+        $zone = $tag->getZone();
+        $zoneProperty = $zone?->getProperty();
+        $orderAccount = $tag->getOrderItem()?->getParentOrder()?->getAccount();
+        $isPaired = null !== $zoneProperty && 'stock' !== $tag->getStatus();
+
+        $existingProperties = [];
+        if (null !== $orderAccount) {
+            foreach ($orderAccount->getProperties() as $prop) {
+                $existingProperties[] = [
+                    'id' => $prop->getId(),
+                    'name' => $prop->getName(),
+                ];
+            }
+        }
+
+        return $this->json([
+            'shortUid' => $tag->getShortUid(),
+            'status' => $tag->getStatus(),
+            'paired' => $isPaired,
+            'redirectUrl' => $isPaired ? '/g/'.$tag->getShortUid() : null,
+            'productName' => $tag->getOrderItem()?->getProductName(),
+            'accountName' => ($zoneProperty?->getAccount() ?? $orderAccount)?->getName(),
+            'propertyName' => $zoneProperty?->getName(),
+            'zoneName' => $zone?->getName(),
+            'existingProperties' => $existingProperties,
+        ]);
+    }
+
+    #[Route('/api/public/tap/{shortUid}/pair', name: 'api_public_tap_pair', methods: ['POST'])]
+    public function pairTap(
+        string $shortUid,
+        Request $request,
+        NfcTagRepository $nfcTagRepository,
+        PropertyRepository $propertyRepository,
+        WifiCredentialCrypto $wifiCrypto,
+        RagConciergeService $ragConcierge,
+        EntityManagerInterface $entityManager,
+    ): JsonResponse {
+        [$tag, $errorResponse] = $this->resolveActiveTag($shortUid, $nfcTagRepository);
+        if (null !== $errorResponse) {
+            return $errorResponse;
+        }
+
+        $payload = json_decode($request->getContent() ?: '{}', true);
+        if (!\is_array($payload)) {
+            return $this->json(['error' => 'Payload JSON invalide.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $account = $tag->getZone()?->getProperty()?->getAccount()
+            ?? $tag->getOrderItem()?->getParentOrder()?->getAccount();
+
+        $property = null;
+        $requestedPropertyId = isset($payload['propertyId']) ? (int) $payload['propertyId'] : 0;
+        if ($requestedPropertyId > 0) {
+            $candidate = $propertyRepository->find($requestedPropertyId);
+            if (null !== $candidate && (null === $account || $candidate->getAccount()?->getId() === $account->getId())) {
+                $property = $candidate;
+                $account = $candidate->getAccount();
+            }
+        }
+
+        $accountName = trim((string) ($payload['accountName'] ?? ''));
+        if (null === $account) {
+            $account = new Account();
+            $account->setName('' !== $accountName ? $accountName : 'Propriétaire Magic Scan #'.$tag->getShortUid());
+            $account->setType('B2C');
+            $entityManager->persist($account);
+        }
+
+        $propertyName = trim((string) ($payload['propertyName'] ?? ''));
+        if (null === $property) {
+            if ('' === $propertyName) {
+                return $this->json(['error' => 'Veuillez indiquer le nom de votre logement.'], Response::HTTP_BAD_REQUEST);
+            }
+            $property = new Property();
+            $property->setName($propertyName);
+            $property->setAccount($account);
+            $entityManager->persist($property);
+        } elseif ('' !== $propertyName) {
+            $property->setName($propertyName);
+        }
+
+        if (isset($payload['wifiSSID']) && '' !== trim((string) $payload['wifiSSID'])) {
+            $property->setWifiSSID($wifiCrypto->encrypt(trim((string) $payload['wifiSSID'])));
+        }
+        if (isset($payload['wifiPassword']) && '' !== trim((string) $payload['wifiPassword'])) {
+            $property->setWifiPassword($wifiCrypto->encrypt((string) $payload['wifiPassword']));
+        }
+        if (isset($payload['wifiAccessCode'])) {
+            $pin = trim((string) $payload['wifiAccessCode']);
+            $property->setWifiAccessCode('' !== $pin ? $wifiCrypto->encrypt($pin) : null);
+        }
+        if (isset($payload['externalGuideUrl'])) {
+            $url = trim((string) $payload['externalGuideUrl']);
+            $property->setExternalGuideUrl('' !== $url ? $url : null);
+        }
+        if (isset($payload['instructions'])) {
+            $instr = trim((string) $payload['instructions']);
+            $property->setInstructions('' !== $instr ? $instr : null);
+        }
+
+        $zoneName = trim((string) ($payload['zoneName'] ?? ''));
+        if ('' === $zoneName) {
+            $zoneName = 'Entrée Principale';
+        }
+        $mountType = trim((string) ($payload['mountType'] ?? ''));
+        if ('' === $mountType) {
+            $mountType = $tag->getOrderItem()?->getProductName() ?? 'Support NFC VisuAlpes';
+        }
+
+        $zone = $tag->getZone();
+        if (null === $zone || $zone->getProperty()?->getId() !== $property->getId()) {
+            $zone = new Zone();
+            $zone->setProperty($property);
+            $property->addZone($zone);
+            $entityManager->persist($zone);
+        }
+        $zone->setName($zoneName);
+        $zone->setMountType($mountType);
+
+        $tag->setZone($zone);
+        $tag->setStatus('assigned');
+        if (null === $tag->getEncodeAt()) {
+            $tag->setEncodeAt(new \DateTime());
+        }
+
+        $ragConcierge->vectorizeProperty($property);
+
+        $entityManager->flush();
+
+        return $this->json([
+            'paired' => true,
+            'shortUid' => $tag->getShortUid(),
+            'redirectUrl' => '/g/'.$tag->getShortUid(),
+            'propertyName' => $property->getName(),
+            'zoneName' => $zone->getName(),
         ]);
     }
 

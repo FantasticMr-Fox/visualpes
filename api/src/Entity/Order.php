@@ -90,6 +90,10 @@ class Order
     #[Groups(['order:read', 'order:write'])]
     private ?string $trackingNumber = null;
 
+    #[ORM\Column(length: 100, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $storeReference = null;
+
     /**
      * @var Collection<int, OrderItem>
      */
@@ -212,6 +216,18 @@ class Order
     public function setTrackingNumber(?string $trackingNumber): static
     {
         $this->trackingNumber = $trackingNumber;
+
+        return $this;
+    }
+
+    public function getStoreReference(): ?string
+    {
+        return $this->storeReference;
+    }
+
+    public function setStoreReference(?string $storeReference): static
+    {
+        $this->storeReference = $storeReference;
 
         return $this;
     }

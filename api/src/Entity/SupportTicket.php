@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\SupportTicketRepository;
+use App\State\SupportTicketStateProcessor;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -19,8 +20,14 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(),
         new Get(),
-        new Post(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()"),
-        new Patch(securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()"),
+        new Post(
+            securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()",
+            processor: SupportTicketStateProcessor::class,
+        ),
+        new Patch(
+            securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getAccount() === user.getAccount()",
+            processor: SupportTicketStateProcessor::class,
+        ),
         new Delete(),
     ],
     security: "is_granted('ROLE_USER')",
@@ -28,6 +35,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 class SupportTicket
 {
     public const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+    public const ISSUE_TYPES = ['nfc_defect', 'wifi_issue', 'guide_update', 'billing', 'other'];
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -52,6 +60,17 @@ class SupportTicket
     )]
     private ?string $status = 'open';
 
+    #[ORM\Column(length: 50, options: ['default' => 'other'])]
+    #[Assert\Choice(choices: self::ISSUE_TYPES)]
+    private string $issueType = 'other';
+
+    #[ORM\Column(options: ['default' => false])]
+    #[ApiProperty(
+        securityPostDenormalize: "is_granted('ROLE_ADMIN')",
+        extraProperties: ['throw_on_access_denied' => true],
+    )]
+    private bool $isAiResolved = false;
+
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[ApiProperty(
         security: "is_granted('ROLE_ADMIN')",
@@ -72,6 +91,14 @@ class SupportTicket
     #[ORM\ManyToOne(inversedBy: 'supportTickets')]
     #[ORM\JoinColumn(nullable: false)]
     private ?Account $account = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Property $property = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?NfcTag $nfcTag = null;
 
     public function getId(): ?int
     {
@@ -114,6 +141,30 @@ class SupportTicket
         return $this;
     }
 
+    public function getIssueType(): string
+    {
+        return $this->issueType;
+    }
+
+    public function setIssueType(string $issueType): static
+    {
+        $this->issueType = $issueType;
+
+        return $this;
+    }
+
+    public function getIsAiResolved(): bool
+    {
+        return $this->isAiResolved;
+    }
+
+    public function setIsAiResolved(bool $isAiResolved): static
+    {
+        $this->isAiResolved = $isAiResolved;
+
+        return $this;
+    }
+
     public function getAiDraft(): ?string
     {
         return $this->aiDraft;
@@ -146,6 +197,30 @@ class SupportTicket
     public function setAccount(?Account $account): static
     {
         $this->account = $account;
+
+        return $this;
+    }
+
+    public function getProperty(): ?Property
+    {
+        return $this->property;
+    }
+
+    public function setProperty(?Property $property): static
+    {
+        $this->property = $property;
+
+        return $this;
+    }
+
+    public function getNfcTag(): ?NfcTag
+    {
+        return $this->nfcTag;
+    }
+
+    public function setNfcTag(?NfcTag $nfcTag): static
+    {
+        $this->nfcTag = $nfcTag;
 
         return $this;
     }

@@ -7,6 +7,7 @@ import type {
   NfcTagItem,
   Order,
   PropertyItem,
+  SupportIssueType,
   SupportTicketItem,
   UserItem,
   ZoneItem,
@@ -1569,9 +1570,23 @@ export function NfcTagsView({
 interface SupportTicketsViewProps {
   isAdmin: boolean;
   accounts: AccountSummary[];
+  properties: PropertyItem[];
+  nfcTags: NfcTagItem[];
   tickets: SupportTicketItem[];
-  onCreateTicket: (payload: { subject: string; message: string; account: string }) => Promise<void>;
-  onUpdateTicketStatus: (ticketIri: string, status: SupportTicketItem["status"]) => Promise<void>;
+  onCreateTicket: (payload: {
+    subject: string;
+    message: string;
+    account: string;
+    issueType?: SupportIssueType;
+    property?: string | null;
+    nfcTag?: string | null;
+  }) => Promise<void>;
+  onUpdateTicket: (
+    ticketIri: string,
+    payload: Partial<
+      Pick<SupportTicketItem, "status" | "aiDraft" | "isAiResolved" | "issueType">
+    >,
+  ) => Promise<void>;
 }
 
 const TICKET_STATUS_LABELS: Record<SupportTicketItem["status"], { label: string; cls: string }> = {
@@ -1581,18 +1596,39 @@ const TICKET_STATUS_LABELS: Record<SupportTicketItem["status"], { label: string;
   closed: { label: "Fermé", cls: "bg-neutral-800 text-neutral-400" },
 };
 
+const ISSUE_TYPE_LABELS: Record<SupportIssueType, { label: string; cls: string }> = {
+  nfc_defect: { label: "Puce NFC / Matériel", cls: "border-purple-500/30 bg-purple-500/10 text-purple-300" },
+  wifi_issue: { label: "Wi-Fi & Accès", cls: "border-sky-500/30 bg-sky-500/10 text-sky-300" },
+  guide_update: { label: "Livret / Consignes", cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
+  billing: { label: "Commande / Facturation", cls: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
+  other: { label: "Autre demande", cls: "border-neutral-700 bg-neutral-800/80 text-neutral-300" },
+};
+
 export function SupportTicketsView({
   isAdmin,
   accounts,
+  properties,
+  nfcTags,
   tickets,
   onCreateTicket,
-  onUpdateTicketStatus,
+  onUpdateTicket,
 }: SupportTicketsViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [issueType, setIssueType] = useState<SupportIssueType>("other");
   const [accountIri, setAccountIri] = useState(accounts[0]?.["@id"] ?? "/api/accounts/1");
+  const [propertyIri, setPropertyIri] = useState<string>("");
+  const [nfcTagIri, setNfcTagIri] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [editedDrafts, setEditedDrafts] = useState<Record<string, string>>({});
+  const [busyTicketIri, setBusyTicketIri] = useState<string | null>(null);
+
+  const accountProperties = properties.filter((p) => p.account === accountIri);
+
+  const openCount = tickets.filter((t) => t.status === "open" || t.status === "in_progress").length;
+  const aiReadyCount = tickets.filter((t) => Boolean(t.aiDraft) && t.status !== "resolved" && t.status !== "closed").length;
+  const aiResolvedCount = tickets.filter((t) => Boolean(t.isAiResolved)).length;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1602,12 +1638,46 @@ export function SupportTicketsView({
         subject: subject.trim(),
         message: message.trim(),
         account: accountIri || accounts[0]?.["@id"] || "/api/accounts/1",
+        issueType,
+        property: propertyIri || null,
+        nfcTag: nfcTagIri || null,
       });
       setSubject("");
       setMessage("");
+      setIssueType("other");
+      setPropertyIri("");
+      setNfcTagIri("");
       setModalOpen(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleApproveAiDraft = async (t: SupportTicketItem) => {
+    const finalDraft = editedDrafts[t["@id"]] ?? t.aiDraft ?? "";
+    setBusyTicketIri(t["@id"]);
+    try {
+      await onUpdateTicket(t["@id"], {
+        aiDraft: finalDraft,
+        isAiResolved: true,
+        status: "resolved",
+      });
+    } finally {
+      setBusyTicketIri(null);
+    }
+  };
+
+  const handleRegenerateAi = async (t: SupportTicketItem) => {
+    setBusyTicketIri(t["@id"]);
+    try {
+      await onUpdateTicket(t["@id"], { aiDraft: "" });
+      setEditedDrafts((prev) => {
+        const copy = { ...prev };
+        delete copy[t["@id"]];
+        return copy;
+      });
+    } finally {
+      setBusyTicketIri(null);
     }
   };
 
@@ -1615,21 +1685,41 @@ export function SupportTicketsView({
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white">Support</h1>
+          <h1 className="text-xl font-bold tracking-tight text-white">Support & Triage IA</h1>
           <p className="text-xs text-neutral-400">
-            Demandes d&apos;assistance et suivi SAV
+            Qualification automatique RAG et résolution assistée des demandes SAV
           </p>
         </div>
         <button
           type="button"
           onClick={() => {
-            setAccountIri(accounts[0]?.["@id"] ?? "/api/accounts/1");
+            const defaultAcc = accounts[0]?.["@id"] ?? "/api/accounts/1";
+            setAccountIri(defaultAcc);
+            setPropertyIri("");
+            setNfcTagIri("");
+            setIssueType("other");
             setModalOpen(true);
           }}
           className="rounded-lg bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-950 hover:bg-neutral-200"
         >
           + Nouveau ticket
         </button>
+      </div>
+
+      {/* Synthèse rapide SAV & IA */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/40 px-4 py-3">
+          <span className="text-[11px] text-neutral-400">À traiter</span>
+          <p className="mt-0.5 font-mono text-lg font-bold text-white">{openCount}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/40 px-4 py-3">
+          <span className="text-[11px] text-neutral-400">Brouillons IA prêts</span>
+          <p className="mt-0.5 font-mono text-lg font-bold text-sky-300">{aiReadyCount}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/40 px-4 py-3">
+          <span className="text-[11px] text-neutral-400">Résolus via IA</span>
+          <p className="mt-0.5 font-mono text-lg font-bold text-emerald-300">{aiResolvedCount}</p>
+        </div>
       </div>
 
       {tickets.length === 0 ? (
@@ -1640,22 +1730,47 @@ export function SupportTicketsView({
         <div className="flex flex-col gap-3">
           {tickets.map((t) => {
             const acc = accounts.find((a) => a["@id"] === t.account);
+            const prop = t.property ? properties.find((p) => p["@id"] === t.property) : null;
+            const tag = t.nfcTag ? nfcTags.find((tg) => tg["@id"] === t.nfcTag) : null;
             const badge = TICKET_STATUS_LABELS[t.status] ?? TICKET_STATUS_LABELS.open;
+            const issueBadge = ISSUE_TYPE_LABELS[t.issueType ?? "other"] ?? ISSUE_TYPE_LABELS.other;
+            const currentDraft = editedDrafts[t["@id"]] ?? t.aiDraft ?? "";
+            const confidencePct =
+              typeof t.aiConfidence === "number" ? Math.round(t.aiConfidence * 100) : null;
+
             return (
               <div
                 key={t["@id"]}
-                className="flex flex-col gap-2.5 rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-4"
+                className="flex flex-col gap-3 rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs text-neutral-500">#{t.id}</span>
                     <h3 className="text-sm font-bold text-white">{t.subject}</h3>
-                    <span className="text-xs text-neutral-500">
+                    <span className={`rounded-md border px-2 py-0.5 text-[10px] font-medium ${issueBadge.cls}`}>
+                      {issueBadge.label}
+                    </span>
+                    <span className="text-xs text-neutral-400">
                       • {acc?.name ?? t.account}
                     </span>
+                    {prop && (
+                      <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-300">
+                        {prop.name}
+                      </span>
+                    )}
+                    {tag && (
+                      <span className="rounded bg-purple-500/15 px-1.5 py-0.5 font-mono text-[10px] text-purple-300">
+                        #{tag.shortUid}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {t.isAiResolved && (
+                      <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                        ✓ Résolu IA
+                      </span>
+                    )}
                     <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
                       {badge.label}
                     </span>
@@ -1663,10 +1778,9 @@ export function SupportTicketsView({
                       <select
                         value={t.status}
                         onChange={(e) =>
-                          void onUpdateTicketStatus(
-                            t["@id"],
-                            e.target.value as SupportTicketItem["status"],
-                          )
+                          void onUpdateTicket(t["@id"], {
+                            status: e.target.value as SupportTicketItem["status"],
+                          })
                         }
                         className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-xs text-neutral-200"
                       >
@@ -1681,10 +1795,53 @@ export function SupportTicketsView({
 
                 <p className="text-xs leading-relaxed text-neutral-300">{t.message}</p>
 
-                {t.aiDraft && (
-                  <div className="rounded-xl border border-sky-500/25 bg-sky-950/15 p-3 text-xs text-sky-200">
-                    <span className="font-semibold text-sky-300">Suggestion IA : </span>
-                    {t.aiDraft}
+                {isAdmin && (t.aiDraft || busyTicketIri === t["@id"]) && (
+                  <div className="flex flex-col gap-2.5 rounded-xl border border-sky-500/25 bg-sky-950/10 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-sky-300">
+                          Brouillon IA (Contexte RAG)
+                        </span>
+                        {confidencePct !== null && (
+                          <span className="rounded bg-sky-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-sky-200">
+                            Confiance {confidencePct}%
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={busyTicketIri === t["@id"]}
+                          onClick={() => void handleRegenerateAi(t)}
+                          className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] text-neutral-300 hover:bg-neutral-800 hover:text-white disabled:opacity-50"
+                        >
+                          Régénérer IA
+                        </button>
+                        {t.status !== "resolved" && (
+                          <button
+                            type="button"
+                            disabled={busyTicketIri === t["@id"]}
+                            onClick={() => void handleApproveAiDraft(t)}
+                            className="rounded-lg bg-emerald-400 px-3 py-1 text-[11px] font-semibold text-neutral-950 hover:bg-emerald-300 disabled:opacity-50"
+                          >
+                            ✓ Valider & Résoudre via IA
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <textarea
+                      rows={4}
+                      value={currentDraft}
+                      onChange={(e) =>
+                        setEditedDrafts((prev) => ({
+                          ...prev,
+                          [t["@id"]]: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-lg border border-neutral-800 bg-neutral-950/80 p-2.5 text-xs leading-relaxed text-neutral-200 outline-none focus:border-sky-500/50"
+                    />
                   </div>
                 )}
               </div>
@@ -1697,10 +1854,10 @@ export function SupportTicketsView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <form
             onSubmit={handleCreate}
-            className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex w-full max-w-md flex-col gap-3.5 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <h2 className="text-base font-bold">Nouveau ticket</h2>
+              <h2 className="text-base font-bold">Nouveau ticket SAV</h2>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
@@ -1714,7 +1871,10 @@ export function SupportTicketsView({
                 Client
                 <select
                   value={accountIri}
-                  onChange={(e) => setAccountIri(e.target.value)}
+                  onChange={(e) => {
+                    setAccountIri(e.target.value);
+                    setPropertyIri("");
+                  }}
                   className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
                 >
                   {accounts.map((a) => (
@@ -1725,6 +1885,58 @@ export function SupportTicketsView({
                 </select>
               </label>
             )}
+
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                Catégorie (ou auto-détection IA)
+                <select
+                  value={issueType}
+                  onChange={(e) => setIssueType(e.target.value as SupportIssueType)}
+                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs"
+                >
+                  <option value="other">Détection automatique IA</option>
+                  <option value="nfc_defect">Puce NFC / Matériel</option>
+                  <option value="wifi_issue">Wi-Fi & Accès</option>
+                  <option value="guide_update">Livret / Consignes</option>
+                  <option value="billing">Commande / Facturation</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                Logement concerné (optionnel)
+                <select
+                  value={propertyIri}
+                  onChange={(e) => setPropertyIri(e.target.value)}
+                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs"
+                >
+                  <option value="">— Aucun —</option>
+                  {accountProperties.map((p) => (
+                    <option key={p["@id"]} value={p["@id"]}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {nfcTags.length > 0 && (
+              <label className="flex flex-col gap-1 text-xs text-neutral-300">
+                Puce NFC concernée (optionnel)
+                <select
+                  value={nfcTagIri}
+                  onChange={(e) => setNfcTagIri(e.target.value)}
+                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-xs"
+                >
+                  <option value="">— Aucune puce spécifique —</option>
+                  {nfcTags.map((tg) => (
+                    <option key={tg["@id"]} value={tg["@id"]}>
+                      #{tg.shortUid} ({tg.status})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Sujet
               <input
@@ -1732,17 +1944,18 @@ export function SupportTicketsView({
                 required
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="ex: Modification du livret d'accueil"
+                placeholder="ex: Puce NFC #VA4568 ne répond plus au scan"
                 className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
-              Message
+              Description
               <textarea
                 rows={4}
                 required
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                placeholder="Décrivez votre demande, l'IA préparera un diagnostic instantané…"
                 className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
               />
             </label>
@@ -1759,7 +1972,7 @@ export function SupportTicketsView({
                 disabled={saving}
                 className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
               >
-                {saving ? "Envoi…" : "Envoyer"}
+                {saving ? "Analyse IA & Envoi…" : "Envoyer"}
               </button>
             </div>
           </form>

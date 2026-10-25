@@ -20,6 +20,7 @@ import type {
   OrderItem,
   PropertyItem,
   StockItem,
+  SupportIssueType,
   SupportTicketItem,
   UserItem,
   ZoneItem,
@@ -792,7 +793,14 @@ export default function KanbanPage() {
     await refreshAllData();
   };
 
-  const createTicket = async (payload: { subject: string; message: string; account: string }) => {
+  const createTicket = async (payload: {
+    subject: string;
+    message: string;
+    account: string;
+    issueType?: SupportIssueType;
+    property?: string | null;
+    nfcTag?: string | null;
+  }) => {
     const res = await apiFetch(`${API_URL}/support_tickets`, {
       method: "POST",
       headers: { "Content-Type": "application/ld+json" },
@@ -801,11 +809,16 @@ export default function KanbanPage() {
     if (res.ok) await refreshAllData();
   };
 
-  const updateTicketStatus = async (ticketIri: string, status: SupportTicketItem["status"]) => {
+  const updateTicket = async (
+    ticketIri: string,
+    payload: Partial<
+      Pick<SupportTicketItem, "status" | "aiDraft" | "isAiResolved" | "issueType">
+    >,
+  ) => {
     const res = await apiFetch(ticketIri, {
       method: "PATCH",
       headers: { "Content-Type": "application/merge-patch+json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) await refreshAllData();
   };
@@ -880,7 +893,8 @@ export default function KanbanPage() {
     const stockName = order.targetStockItem?.name?.toLowerCase() ?? "";
     const notesMatch =
       (order.workshopNotes?.toLowerCase().includes(q) ?? false) ||
-      (order.trackingNumber?.toLowerCase().includes(q) ?? false);
+      (order.trackingNumber?.toLowerCase().includes(q) ?? false) ||
+      (order.storeReference?.toLowerCase().includes(q) ?? false);
     const matchItems = (order.orderItems ?? []).some((it) =>
       it.productName.toLowerCase().includes(q),
     );
@@ -1105,6 +1119,11 @@ export default function KanbanPage() {
                                     >
                                       #{order.id}
                                     </span>
+                                    {order.storeReference && (
+                                      <span className="rounded bg-sky-500/15 px-1.5 py-0.2 font-mono text-[10px] font-medium text-sky-300">
+                                        {order.storeReference}
+                                      </span>
+                                    )}
                                     <span className="truncate text-xs font-semibold text-neutral-200">
                                       {isStock
                                         ? order.targetStockItem?.name ?? "Réappro Stock"
@@ -1330,9 +1349,11 @@ export default function KanbanPage() {
           <SupportTicketsView
             isAdmin={isAdmin}
             accounts={accounts}
+            properties={properties}
+            nfcTags={nfcTags}
             tickets={supportTickets}
             onCreateTicket={createTicket}
-            onUpdateTicketStatus={updateTicketStatus}
+            onUpdateTicket={updateTicket}
           />
         )}
       </main>

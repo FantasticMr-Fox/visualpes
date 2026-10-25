@@ -70,6 +70,13 @@ class Property
     #[ApiProperty(readable: false, writable: true)]
     private ?string $wifiAccessCode = null;
 
+    /**
+     * @var list<float>|null
+     */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[ApiProperty(readable: false, writable: false)]
+    private ?array $instructionsVector = null;
+
     public function __construct()
     {
         $this->zones = new ArrayCollection();
@@ -189,6 +196,24 @@ class Property
     public function setWifiAccessCode(?string $wifiAccessCode): static
     {
         $this->wifiAccessCode = $wifiAccessCode;
+
+        return $this;
+    }
+
+    /**
+     * @return list<float>|null
+     */
+    public function getInstructionsVector(): ?array
+    {
+        return $this->instructionsVector;
+    }
+
+    /**
+     * @param list<float>|null $instructionsVector
+     */
+    public function setInstructionsVector(?array $instructionsVector): static
+    {
+        $this->instructionsVector = $instructionsVector;
 
         return $this;
     }
