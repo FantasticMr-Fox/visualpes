@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { API_URL } from "@/lib/api";
 
@@ -19,7 +19,7 @@ interface TapInspectPayload {
 
 const ZONE_SUGGESTIONS = ["Entrée", "Salon", "Cuisine", "Chambre", "Ski Room"];
 
-export default function NfcTapRoutingPage() {
+function NfcTapRoutingContent() {
   const params = useParams<{ uid: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -311,6 +311,22 @@ export default function NfcTapRoutingPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function NfcTapRoutingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-neutral-950 p-6 text-neutral-100">
+          <div className="text-center text-xs text-neutral-400">
+            Chargement du support NFC…
+          </div>
+        </main>
+      }
+    >
+      <NfcTapRoutingContent />
+    </Suspense>
   );
 }
 

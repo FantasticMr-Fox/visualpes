@@ -59,7 +59,7 @@ export function NfcEncodingModal({
 }: NfcEncodingModalProps) {
   const [selectedItemIri, setSelectedItemIri] = useState<string>("");
   const [mode, setMode] = useState<"new" | "stock">("new");
-  const [shortUid, setShortUid] = useState<string>(() => generateShortUid());
+  const [shortUid, setShortUid] = useState<string>("");
   const [stockTagIri, setStockTagIri] = useState<string>("");
   const [selectedZoneIri, setSelectedZoneIri] = useState<string>("");
 
@@ -168,9 +168,9 @@ export function NfcEncodingModal({
         });
         setStockTagIri("");
       } else {
-        if (!shortUid.trim()) return;
+        const uidToUse = (shortUid.trim() || generateShortUid()).toUpperCase();
         await onEncodeTagForOrderItem({
-          shortUid: shortUid.trim().toUpperCase(),
+          shortUid: uidToUse,
           orderItemIri: activeItemIri,
           zoneIri: selectedZoneIri || null,
         });
@@ -454,8 +454,11 @@ export function NfcEncodingModal({
                     <input
                       type="text"
                       maxLength={10}
-                      required
+                      placeholder="Ex: VA4568 (ou Générer)"
                       value={shortUid}
+                      onFocus={() => {
+                        if (!shortUid) setShortUid(generateShortUid());
+                      }}
                       onChange={(e) => setShortUid(e.target.value.toUpperCase())}
                       className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 font-mono text-sm font-bold text-white"
                     />

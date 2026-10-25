@@ -1283,7 +1283,7 @@ export function NfcTagsView({
   onDeleteNfcTag,
   onReplaceDefectiveNfcTag,
 }: NfcTagsViewProps) {
-  const [shortUid, setShortUid] = useState(() => generateQuickShortUid());
+  const [shortUid, setShortUid] = useState<string>("");
   const [status, setStatus] = useState<NfcTagItem["status"]>("stock");
   const [statusFilter, setStatusFilter] = useState<"all" | NfcTagItem["status"]>("all");
   const [saving, setSaving] = useState(false);
@@ -1293,10 +1293,10 @@ export function NfcTagsView({
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shortUid.trim()) return;
+    const uidToCreate = (shortUid.trim() || generateQuickShortUid()).toUpperCase();
     setSaving(true);
     try {
-      await onCreateNfcTag({ shortUid: shortUid.trim().toUpperCase(), status });
+      await onCreateNfcTag({ shortUid: uidToCreate, status });
       setShortUid(generateQuickShortUid());
     } finally {
       setSaving(false);
@@ -1336,9 +1336,11 @@ export function NfcTagsView({
             <input
               type="text"
               maxLength={10}
-              required
               placeholder="VA2048"
               value={shortUid}
+              onFocus={() => {
+                if (!shortUid) setShortUid(generateQuickShortUid());
+              }}
               onChange={(e) => setShortUid(e.target.value.toUpperCase())}
               className="w-28 bg-transparent px-2.5 py-1.5 font-mono text-xs text-white outline-none"
             />
