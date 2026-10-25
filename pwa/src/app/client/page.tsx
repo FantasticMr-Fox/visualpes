@@ -11,6 +11,19 @@ import {
   getTokenRoles,
 } from "@/lib/api";
 import { WifiQrCodeSvg } from "@/components/common/WifiQrCodeSvg";
+import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Textarea,
+} from "@/components/ui";
+import { Building2, LifeBuoy, LogOut, Package, Users } from "lucide-react";
 import type {
   AccountSummary,
   Order,
@@ -594,21 +607,25 @@ export default function ClientDashboardPage() {
                   id: "properties" as const,
                   label: "Logements & NFC",
                   badge: properties.length,
+                  icon: <Building2 className="h-4 w-4" />,
                 },
                 {
                   id: "orders" as const,
                   label: "Mes Commandes",
                   badge: orders.length,
+                  icon: <Package className="h-4 w-4" />,
                 },
                 {
                   id: "team" as const,
                   label: "Équipe & Accès",
                   badge: teamMembers.length,
+                  icon: <Users className="h-4 w-4" />,
                 },
                 {
                   id: "support" as const,
                   label: "Assistance SAV",
                   badge: openTicketsCount > 0 ? openTicketsCount : tickets.length,
+                  icon: <LifeBuoy className="h-4 w-4" />,
                 },
               ]
             ).map((item) => {
@@ -624,16 +641,15 @@ export default function ClientDashboardPage() {
                       : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
                   }`}
                 >
-                  <span>{item.label}</span>
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
-                      active
-                        ? "bg-neutral-950 text-white"
-                        : "bg-neutral-900 text-neutral-500"
-                    }`}
-                  >
-                    {item.badge}
+                  <span className="flex items-center gap-2.5">
+                    <span className={active ? "text-emerald-400" : "text-neutral-500"}>
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
                   </span>
+                  <Badge variant={active ? "default" : "secondary"}>
+                    {item.badge}
+                  </Badge>
                 </button>
               );
             })}
@@ -646,16 +662,18 @@ export default function ClientDashboardPage() {
               {overview.currentUser.email}
             </div>
           )}
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => {
               clearToken();
               router.replace("/login");
             }}
-            className="w-full rounded-xl border border-neutral-800 bg-neutral-900/60 py-2 text-xs text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+            className="w-full"
           >
-            Déconnexion
-          </button>
+            <LogOut className="h-3.5 w-3.5" />
+            <span>Déconnexion</span>
+          </Button>
         </div>
       </aside>
 
@@ -697,30 +715,30 @@ export default function ClientDashboardPage() {
 
             {/* Cartes de synthèse */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/40 px-4 py-3">
+              <Card className="bg-neutral-900/40 px-4 py-3">
                 <span className="text-[11px] text-neutral-400">Logements</span>
                 <p className="mt-0.5 font-mono text-lg font-bold text-white">
                   {properties.length}
                 </p>
-              </div>
-              <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/40 px-4 py-3">
+              </Card>
+              <Card className="bg-neutral-900/40 px-4 py-3">
                 <span className="text-[11px] text-neutral-400">Zones configurées</span>
                 <p className="mt-0.5 font-mono text-lg font-bold text-white">
                   {clientZones.length}
                 </p>
-              </div>
-              <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/40 px-4 py-3">
+              </Card>
+              <Card className="bg-neutral-900/40 px-4 py-3">
                 <span className="text-[11px] text-neutral-400">Supports NFC actifs</span>
                 <p className="mt-0.5 font-mono text-lg font-bold text-emerald-300">
                   {nfcTags.filter((t) => t.status !== "defective").length}
                 </p>
-              </div>
-              <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/40 px-4 py-3">
+              </Card>
+              <Card className="bg-neutral-900/40 px-4 py-3">
                 <span className="text-[11px] text-neutral-400">Commandes</span>
                 <p className="mt-0.5 font-mono text-lg font-bold text-sky-300">
                   {orders.length}
                 </p>
-              </div>
+              </Card>
             </div>
 
             {properties.length === 0 ? (
@@ -1411,16 +1429,16 @@ export default function ClientDashboardPage() {
       )}
 
       {/* MODALE CRÉATION / ÉDITION ZONE */}
-      {zoneModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+      <Dialog open={zoneModalOpen} onOpenChange={setZoneModalOpen}>
+        <DialogContent className="max-w-sm">
           <form
             onSubmit={(e) => void submitZoneForm(e)}
-            className="flex w-full max-w-sm flex-col gap-3.5 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex flex-col gap-3.5"
           >
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <h2 className="text-base font-bold">
+            <DialogHeader>
+              <DialogTitle>
                 {editingZone ? "Modifier la zone" : "Nouvelle zone"}
-              </h2>
+              </DialogTitle>
               <button
                 type="button"
                 onClick={() => setZoneModalOpen(false)}
@@ -1428,61 +1446,56 @@ export default function ClientDashboardPage() {
               >
                 ✕
               </button>
-            </div>
+            </DialogHeader>
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Nom de la pièce / zone
-              <input
+              <Input
                 type="text"
                 required
                 value={zoneName}
                 onChange={(e) => setZoneName(e.target.value)}
                 placeholder="ex: Entrée, Îlot Cuisine, Salon…"
-                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Type de support
-              <input
+              <Input
                 type="text"
                 value={zoneMount}
                 onChange={(e) => setZoneMount(e.target.value)}
                 placeholder="ex: Plaque Bois Gravé, Socle Comptoir…"
-                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white"
               />
             </label>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
+            <DialogFooter>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setZoneModalOpen(false)}
-                className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300"
               >
                 Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={savingZone}
-                className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
-              >
+              </Button>
+              <Button type="submit" size="sm" disabled={savingZone}>
                 {savingZone ? "Enregistrement…" : "Enregistrer"}
-              </button>
-            </div>
+              </Button>
+            </DialogFooter>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* MODALE COLLABORATEUR ÉQUIPE */}
-      {teamModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+      <Dialog open={teamModalOpen} onOpenChange={setTeamModalOpen}>
+        <DialogContent className="max-w-sm">
           <form
             onSubmit={(e) => void submitTeamMember(e)}
-            className="flex w-full max-w-sm flex-col gap-3.5 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex flex-col gap-3.5"
           >
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <h2 className="text-base font-bold">
+            <DialogHeader>
+              <DialogTitle>
                 {editingMember
                   ? `Mot de passe (${editingMember.email})`
                   : "Inviter un collaborateur"}
-              </h2>
+              </DialogTitle>
               <button
                 type="button"
                 onClick={() => setTeamModalOpen(false)}
@@ -1490,61 +1503,56 @@ export default function ClientDashboardPage() {
               >
                 ✕
               </button>
-            </div>
+            </DialogHeader>
             {!editingMember && (
               <label className="flex flex-col gap-1 text-xs text-neutral-300">
                 Email du collaborateur
-                <input
+                <Input
                   type="email"
                   required
                   value={memberEmail}
                   onChange={(e) => setMemberEmail(e.target.value)}
                   placeholder="collaborateur@conciergerie.fr"
-                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white"
                 />
               </label>
             )}
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Mot de passe (8 caractères min.)
-              <input
+              <Input
                 type="password"
                 required
                 minLength={8}
                 value={memberPassword}
                 onChange={(e) => setMemberPassword(e.target.value)}
                 placeholder="••••••••"
-                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white"
               />
             </label>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
+            <DialogFooter>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setTeamModalOpen(false)}
-                className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300"
               >
                 Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={savingMember}
-                className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
-              >
+              </Button>
+              <Button type="submit" size="sm" disabled={savingMember}>
                 {savingMember ? "Enregistrement…" : "Valider"}
-              </button>
-            </div>
+              </Button>
+            </DialogFooter>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* MODALE DEMANDE SAV */}
-      {ticketModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+      <Dialog open={ticketModalOpen} onOpenChange={setTicketModalOpen}>
+        <DialogContent>
           <form
             onSubmit={(e) => void submitSupportTicket(e)}
-            className="flex w-full max-w-md flex-col gap-3.5 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl"
+            className="flex flex-col gap-3.5"
           >
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <h2 className="text-base font-bold">Nouvelle demande SAV</h2>
+            <DialogHeader>
+              <DialogTitle>Nouvelle demande SAV</DialogTitle>
               <button
                 type="button"
                 onClick={() => setTicketModalOpen(false)}
@@ -1552,7 +1560,7 @@ export default function ClientDashboardPage() {
               >
                 ✕
               </button>
-            </div>
+            </DialogHeader>
 
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-xs text-neutral-300">
@@ -1591,47 +1599,42 @@ export default function ClientDashboardPage() {
 
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Objet
-              <input
+              <Input
                 type="text"
                 required
                 value={ticketSubject}
                 onChange={(e) => setTicketSubject(e.target.value)}
                 placeholder="ex: Remplacement plaque NFC #VA4568"
-                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-xs text-neutral-300">
               Description
-              <textarea
+              <Textarea
                 rows={4}
                 required
                 value={ticketMessage}
                 onChange={(e) => setTicketMessage(e.target.value)}
                 placeholder="Précisez votre besoin…"
-                className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white"
               />
             </label>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
+            <DialogFooter>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setTicketModalOpen(false)}
-                className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300"
               >
                 Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={savingTicket}
-                className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-neutral-950"
-              >
+              </Button>
+              <Button type="submit" size="sm" disabled={savingTicket}>
                 {savingTicket ? "Envoi…" : "Envoyer au support"}
-              </button>
-            </div>
+              </Button>
+            </DialogFooter>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
