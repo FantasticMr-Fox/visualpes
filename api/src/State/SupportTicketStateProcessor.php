@@ -7,11 +7,13 @@ use ApiPlatform\Metadata\Post;
 use ApiPlatform\State\ProcessorInterface;
 use App\AI\RagConciergeService;
 use App\Entity\SupportTicket;
+use App\Service\AppMailerService;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Exécute automatiquement le triage IA & la génération de brouillon RAG (`aiDraft`, `aiConfidence`, `issueType`)
- * lors de la création d'un ticket SAV ou lorsque la régénération du diagnostic IA est demandée.
+ * lors de la création d'un ticket SAV ou lorsque la régénération du diagnostic IA est demandée,
+ * et envoie un e-mail de résolution au client lorsque le ticket passe en `resolved`.
  *
  * @implements ProcessorInterface<SupportTicket, SupportTicket>
  */
@@ -24,6 +26,7 @@ final readonly class SupportTicketStateProcessor implements ProcessorInterface
         #[Autowire(service: 'api_platform.doctrine.orm.state.persist_processor')]
         private ProcessorInterface $persistProcessor,
         private RagConciergeService $ragConcierge,
+        private AppMailerService $appMailer,
     ) {
     }
 
@@ -32,6 +35,9 @@ final readonly class SupportTicketStateProcessor implements ProcessorInterface
         if (!$data instanceof SupportTicket) {
             return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
         }
+
+        $previous = $context['previous_data'] ?? null;
+        $wasResolved = $previous instanceof SupportTicket && 'resolved' === $previous->getStatus();
 
         if (null === $data->getProperty() && null !== $data->getNfcTag()?->getZone()?->getProperty()) {
             $data->setProperty($data->getNfcTag()->getZone()->getProperty());
@@ -48,7 +54,13 @@ final readonly class SupportTicketStateProcessor implements ProcessorInterface
             $data->setAiConfidence($triage['aiConfidence']);
         }
 
-        return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
+        $result = $this->persistProcessor->process($data, $operation, $uriVariables, $context);
+
+        if (!$wasResolved && 'resolved' === $data->getStatus()) {
+            $this->appMailer->sendSupportTicketResolution($data);
+        }
+
+        return $result;
     }
 }
 

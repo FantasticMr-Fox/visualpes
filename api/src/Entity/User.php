@@ -75,6 +75,32 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\JoinColumn(nullable: false)]
     private ?Account $account = null;
 
+    #[ORM\Column(options: ['default' => false])]
+    private bool $twoFactorEnabled = false;
+
+    #[ORM\Column(length: 20, options: ['default' => 'email'])]
+    private string $twoFactorMethod = 'email';
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[ApiProperty(readable: false, writable: false)]
+    private ?string $totpSecret = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[ApiProperty(readable: false, writable: false)]
+    private ?string $twoFactorCodeHash = null;
+
+    #[ORM\Column(nullable: true)]
+    #[ApiProperty(readable: false, writable: false)]
+    private ?\DateTimeImmutable $twoFactorExpiresAt = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[ApiProperty(readable: false, writable: false)]
+    private ?string $resetTokenHash = null;
+
+    #[ORM\Column(nullable: true)]
+    #[ApiProperty(readable: false, writable: false)]
+    private ?\DateTimeImmutable $resetTokenExpiresAt = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -170,6 +196,90 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAccount(?Account $account): static
     {
         $this->account = $account;
+
+        return $this;
+    }
+
+    public function isTwoFactorEnabled(): bool
+    {
+        return $this->twoFactorEnabled;
+    }
+
+    public function setTwoFactorEnabled(bool $twoFactorEnabled): static
+    {
+        $this->twoFactorEnabled = $twoFactorEnabled;
+
+        return $this;
+    }
+
+    public function getTwoFactorMethod(): string
+    {
+        return $this->twoFactorMethod;
+    }
+
+    public function setTwoFactorMethod(string $twoFactorMethod): static
+    {
+        $this->twoFactorMethod = $twoFactorMethod;
+
+        return $this;
+    }
+
+    public function getTotpSecret(): ?string
+    {
+        return $this->totpSecret;
+    }
+
+    public function setTotpSecret(?string $totpSecret): static
+    {
+        $this->totpSecret = $totpSecret;
+
+        return $this;
+    }
+
+    public function getTwoFactorCodeHash(): ?string
+    {
+        return $this->twoFactorCodeHash;
+    }
+
+    public function setTwoFactorCodeHash(?string $twoFactorCodeHash): static
+    {
+        $this->twoFactorCodeHash = $twoFactorCodeHash;
+
+        return $this;
+    }
+
+    public function getTwoFactorExpiresAt(): ?\DateTimeImmutable
+    {
+        return $this->twoFactorExpiresAt;
+    }
+
+    public function setTwoFactorExpiresAt(?\DateTimeImmutable $twoFactorExpiresAt): static
+    {
+        $this->twoFactorExpiresAt = $twoFactorExpiresAt;
+
+        return $this;
+    }
+
+    public function getResetTokenHash(): ?string
+    {
+        return $this->resetTokenHash;
+    }
+
+    public function setResetTokenHash(?string $resetTokenHash): static
+    {
+        $this->resetTokenHash = $resetTokenHash;
+
+        return $this;
+    }
+
+    public function getResetTokenExpiresAt(): ?\DateTimeImmutable
+    {
+        return $this->resetTokenExpiresAt;
+    }
+
+    public function setResetTokenExpiresAt(?\DateTimeImmutable $resetTokenExpiresAt): static
+    {
+        $this->resetTokenExpiresAt = $resetTokenExpiresAt;
 
         return $this;
     }

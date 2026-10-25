@@ -43,6 +43,7 @@ security:
     access_control:
         - { path: ^/api/webhooks, roles: PUBLIC_ACCESS }
         - { path: ^/api/public, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/(login|2fa/verify|2fa/resend-email|forgot-password|reset-password), roles: PUBLIC_ACCESS }
         - { path: ^/api/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/docs, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }

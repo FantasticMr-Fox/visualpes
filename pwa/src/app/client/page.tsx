@@ -11,6 +11,7 @@ import {
   getTokenRoles,
 } from "@/lib/api";
 import { WifiQrCodeSvg } from "@/components/common/WifiQrCodeSvg";
+import { TwoFactorSettingsModal } from "@/components/common/TwoFactorSettingsModal";
 import {
   Badge,
   Button,
@@ -23,7 +24,7 @@ import {
   Input,
   Textarea,
 } from "@/components/ui";
-import { Building2, LifeBuoy, LogOut, Package, Users } from "lucide-react";
+import { Building2, LifeBuoy, LogOut, Package, ShieldCheck, Users } from "lucide-react";
 import type {
   AccountSummary,
   Order,
@@ -126,6 +127,7 @@ export default function ClientDashboardPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [copiedUid, setCopiedUid] = useState<string | null>(null);
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
 
   // Modale Logement (Création / Édition)
   const [propModalOpen, setPropModalOpen] = useState(false);
@@ -665,6 +667,15 @@ export default function ClientDashboardPage() {
           <Button
             type="button"
             variant="outline"
+            onClick={() => setSecurityModalOpen(true)}
+            className="w-full"
+          >
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Sécurité &amp; 2FA</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
             onClick={() => {
               clearToken();
               router.replace("/login");
@@ -676,6 +687,12 @@ export default function ClientDashboardPage() {
           </Button>
         </div>
       </aside>
+
+      <TwoFactorSettingsModal
+        open={securityModalOpen}
+        onOpenChange={setSecurityModalOpen}
+        isAdmin={isAdmin}
+      />
 
       {/* CONTENU PRINCIPAL */}
       <main className="flex-1 p-6">

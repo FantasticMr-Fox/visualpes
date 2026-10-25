@@ -9,6 +9,7 @@ use App\Repository\AccountRepository;
 use App\Repository\NfcTagRepository;
 use App\Repository\UserRepository;
 use App\Repository\ZoneRepository;
+use App\Service\AppMailerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -158,6 +159,7 @@ final class ClientPortalController extends AbstractController
         AccountRepository $accountRepository,
         UserRepository $userRepository,
         UserPasswordHasherInterface $passwordHasher,
+        AppMailerService $appMailer,
         EntityManagerInterface $entityManager,
     ): JsonResponse {
         $user = $this->getUser();
@@ -192,6 +194,8 @@ final class ClientPortalController extends AbstractController
 
         $entityManager->persist($member);
         $entityManager->flush();
+
+        $appMailer->sendTeamInvite($member, $plainPassword);
 
         return $this->json([
             'id' => $member->getId(),

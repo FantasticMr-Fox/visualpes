@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { ErpTab } from "@/types/erp";
+import { TwoFactorSettingsModal } from "@/components/common/TwoFactorSettingsModal";
 
 interface SidebarProps {
   activeTab: ErpTab;
@@ -32,6 +33,8 @@ export function Sidebar({
   openTicketsCount,
   onLogout,
 }: SidebarProps) {
+  const [securityOpen, setSecurityOpen] = useState(false);
+
   const navItems: Array<{
     id: ErpTab;
     label: string;
@@ -182,12 +185,26 @@ export function Sidebar({
 
         <button
           type="button"
+          onClick={() => setSecurityOpen(true)}
+          className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-2.5 py-1.5 text-center text-xs font-medium text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-white"
+        >
+          Sécurité &amp; 2FA
+        </button>
+
+        <button
+          type="button"
           onClick={onLogout}
           className="rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-rose-300"
         >
           Déconnexion
         </button>
       </div>
+
+      <TwoFactorSettingsModal
+        open={securityOpen}
+        onOpenChange={setSecurityOpen}
+        isAdmin={isAdmin}
+      />
     </aside>
   );
 }
