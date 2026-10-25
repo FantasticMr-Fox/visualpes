@@ -126,10 +126,14 @@ export default function KanbanPage() {
 
   const logout = () => handleUnauthorized();
 
-  // 0. Garde d'authentification
+  // 0. Garde d'authentification & redirection automatique des clients vers /client
   useEffect(() => {
-    if (token === null) router.replace("/login");
-  }, [token, router]);
+    if (token === null) {
+      router.replace("/login");
+    } else if (authReady && !isAdmin) {
+      router.replace("/client");
+    }
+  }, [token, authReady, isAdmin, router]);
 
   const refreshAllData = useCallback(async () => {
     if (!authReady) return;

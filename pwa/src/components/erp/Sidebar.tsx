@@ -171,6 +171,15 @@ export function Sidebar({
           </span>
         </div>
 
+        {isAdmin && (
+          <a
+            href="/client"
+            className="rounded-lg border border-neutral-800 bg-neutral-900/60 px-2.5 py-1.5 text-center text-xs font-medium text-sky-300 transition-colors hover:bg-neutral-800 hover:text-white"
+          >
+            Portail Client ↗
+          </a>
+        )}
+
         <button
           type="button"
           onClick={onLogout}

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { login } from "@/lib/api";
+import { getTokenRoles, login } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,7 +18,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace("/kanban");
+      const roles = getTokenRoles();
+      router.replace(roles.includes("ROLE_ADMIN") ? "/kanban" : "/client");
     } catch {
       setError("Identifiants incorrects. Vérifiez votre email et votre mot de passe.");
     } finally {
@@ -38,7 +39,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight text-white">VisuAlpes</h1>
-            <p className="text-xs text-neutral-400">Connexion à l&apos;espace ERP & Atelier</p>
+            <p className="text-xs text-neutral-400">Connexion Espace Client &amp; Atelier ERP</p>
           </div>
         </div>
 
