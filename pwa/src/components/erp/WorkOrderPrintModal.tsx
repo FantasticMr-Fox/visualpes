@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { Order } from "@/types/erp";
+import { VisuAlpesLogo } from "@/components/common/VisuAlpesLogo";
 
 interface WorkOrderPrintModalProps {
   order: Order | null;
@@ -208,18 +209,11 @@ export function WorkOrderPrintModal({
         {/* EN-TÊTE DU BON DE FABRICATION + CODE-BARRES */}
         <div className="flex flex-col justify-between gap-4 border-b-2 border-neutral-900 pb-4 sm:flex-row sm:items-start">
           <div>
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-neutral-900 bg-neutral-900 font-mono text-sm font-black text-white">
-                VA
-              </div>
-              <div>
-                <h1 className="text-xl font-black uppercase tracking-tight text-neutral-900">
-                  Bon de Fabrication Atelier
-                </h1>
-                <p className="text-xs text-neutral-600">
-                  VisuAlpes — Supports connectés NFC & Impression 3D / Bois / Ciment
-                </p>
-              </div>
+            <div className="flex flex-col gap-2">
+              <VisuAlpesLogo variant="light" className="h-7 w-auto" />
+              <h1 className="text-xl font-bold uppercase tracking-wider text-neutral-900">
+                Bon de Fabrication Atelier
+              </h1>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">

@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { API_URL } from "@/lib/api";
+import { VisuAlpesMark } from "@/components/common/VisuAlpesLogo";
 
 interface TapInspectPayload {
   shortUid: string;
@@ -148,24 +149,24 @@ function NfcTapRoutingContent() {
   const existingProps = inspectData?.existingProperties ?? [];
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 p-4 text-neutral-100">
-      <div className="flex w-full max-w-md flex-col gap-5 rounded-3xl border border-neutral-800/90 bg-neutral-900/70 p-6 shadow-2xl">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#0E0E0E] p-4 text-[#F7F5EF]">
+      <div className="flex w-full max-w-md flex-col gap-5 rounded-2xl border border-white/[0.08] bg-[#151517] p-6 shadow-2xl backdrop-blur-md">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-sky-500 font-mono text-xs font-black text-neutral-950">
-              VA
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#C9A96B]/50 bg-[#191617] p-2">
+              <VisuAlpesMark className="h-full w-full" />
             </div>
             <div>
-              <span className="text-[11px] font-medium text-emerald-400">
+              <span className="text-[11px] font-medium text-[#C9A96B]">
                 Magic Scan • Activation rapide
               </span>
-              <h1 className="text-lg font-bold leading-snug text-white">
+              <h1 className="text-lg font-bold leading-snug text-[#F7F5EF] ">
                 Configurer votre support
               </h1>
             </div>
           </div>
 
-          <span className="rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-0.5 font-mono text-[11px] text-neutral-400">
+          <span className="rounded-lg border border-white/[0.08] bg-[#111113] px-2 py-0.5 font-mono text-[11px] text-[#C9A96B]">
             #{inspectData?.shortUid ?? uid.toUpperCase()}
           </span>
         </div>

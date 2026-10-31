@@ -50,9 +50,30 @@ class StockItem
     #[Groups(['stock_item:read', 'stock_item:write', 'order:read'])]
     private ?string $name = null;
 
+    #[ORM\Column(length: 30, options: ['default' => 'pre_produced'])]
+    #[Groups(['stock_item:read', 'stock_item:write', 'order:read'])]
+    private string $type = 'pre_produced';
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['stock_item:read', 'stock_item:write'])]
+    private ?string $supplier = null;
+
     #[ORM\Column]
+    #[Assert\PositiveOrZero(message: 'La quantité en stock ne peut pas être négative.')]
     #[Groups(['stock_item:read', 'stock_item:write'])]
     private int $quantity = 0;
+
+    #[ORM\Column(length: 30, options: ['default' => 'none'])]
+    #[Groups(['stock_item:read', 'stock_item:write'])]
+    private string $supplierOrderStatus = 'none';
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['stock_item:read', 'stock_item:write'])]
+    private ?int $supplierOrderQuantity = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['stock_item:read'])]
+    private ?\DateTimeImmutable $supplierOrderedAt = null;
 
     #[ORM\Column]
     #[Assert\PositiveOrZero]
@@ -78,10 +99,17 @@ class StockItem
     #[ORM\OneToMany(targetEntity: Order::class, mappedBy: 'targetStockItem')]
     private Collection $stockReplenishmentOrders;
 
+    /**
+     * @var Collection<int, StockMovement>
+     */
+    #[ORM\OneToMany(targetEntity: StockMovement::class, mappedBy: 'stockItem')]
+    private Collection $movements;
+
     public function __construct()
     {
         $this->updatedAt = new \DateTimeImmutable();
         $this->stockReplenishmentOrders = new ArrayCollection();
+        $this->movements = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -113,6 +141,30 @@ class StockItem
         return $this;
     }
 
+    public function getType(): string
+    {
+        return $this->type;
+    }
+
+    public function setType(string $type): static
+    {
+        $this->type = $type;
+
+        return $this;
+    }
+
+    public function getSupplier(): ?string
+    {
+        return $this->supplier;
+    }
+
+    public function setSupplier(?string $supplier): static
+    {
+        $this->supplier = $supplier;
+
+        return $this;
+    }
+
     public function getQuantity(): int
     {
         return $this->quantity;
@@ -120,8 +172,44 @@ class StockItem
 
     public function setQuantity(int $quantity): static
     {
-        $this->quantity = $quantity;
+        $this->quantity = max(0, $quantity);
         $this->updatedAt = new \DateTimeImmutable();
+
+        return $this;
+    }
+
+    public function getSupplierOrderStatus(): string
+    {
+        return $this->supplierOrderStatus;
+    }
+
+    public function setSupplierOrderStatus(string $supplierOrderStatus): static
+    {
+        $this->supplierOrderStatus = $supplierOrderStatus;
+
+        return $this;
+    }
+
+    public function getSupplierOrderQuantity(): ?int
+    {
+        return $this->supplierOrderQuantity;
+    }
+
+    public function setSupplierOrderQuantity(?int $supplierOrderQuantity): static
+    {
+        $this->supplierOrderQuantity = $supplierOrderQuantity;
+
+        return $this;
+    }
+
+    public function getSupplierOrderedAt(): ?\DateTimeImmutable
+    {
+        return $this->supplierOrderedAt;
+    }
+
+    public function setSupplierOrderedAt(?\DateTimeImmutable $supplierOrderedAt): static
+    {
+        $this->supplierOrderedAt = $supplierOrderedAt;
 
         return $this;
     }

@@ -1,20 +1,103 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #f5f5f5;
+  --background: #0e0e0e;
+  --foreground: #f7f5ef;
+  --brand-gold: #c9a96b;
+  --brand-gold-hover: #b89354;
+  --brand-charcoal: #0e0e0e;
+  --brand-surface: #151517;
+  --brand-surface-elevated: #1c1c1f;
+  --brand-border: rgba(255, 255, 255, 0.08);
+  --brand-ivory: #f7f5ef;
+  --brand-taupe: #8c8379;
   color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+  --font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-serif: var(--font-sans), sans-serif;
+  --font-display: var(--font-sans), sans-serif;
+
+  --color-brand-gold: #c9a96b;
+  --color-brand-gold-hover: #b89354;
+  --color-brand-charcoal: #0e0e0e;
+  --color-brand-surface: #151517;
+  --color-brand-surface-elevated: #1c1c1f;
+  --color-brand-border: rgba(255, 255, 255, 0.08);
+  --color-brand-ivory: #f7f5ef;
+  --color-brand-taupe: #8c8379;
+
+  --color-gold-400: #d8bc80;
+  --color-gold-500: #c9a96b;
+  --color-gold-600: #b89354;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Crisp Modern Sans-Serif Headings */
+h1, h2, h3, h4, .font-serif, .font-display {
+  font-family: var(--font-sans);
+  letter-spacing: -0.02em;
+}
+
+/* Unified Surface Card */
+.surface-card {
+  background-color: #151517;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0.625rem;
+}
+
+/* Primary Brand Button */
+.btn-primary-gold {
+  background-color: #c9a96b;
+  color: #0e0e0e;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  transition: all 0.15s ease-in-out;
+}
+.btn-primary-gold:hover {
+  background-color: #b89354;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0e0e0e;
+}
+::-webkit-scrollbar-thumb {
+  background: #242426;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8c8379;
+}
+
+/* Halo doré animé pour la bordure des formulaires */
+@keyframes rotate-border {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-border-beam {
+  animation: rotate-border 6s linear infinite;
+}
+
+
+
+/* Unité de mise en page de l'espace Conciergerie : 1u = 1px de la maquette (312px de large) */
+:root {
+  --u: calc(min(100vw, 430px) / 312);
 }

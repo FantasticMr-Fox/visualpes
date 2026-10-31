@@ -32,7 +32,7 @@ function TabsList({
   return (
     <div
       className={cn(
-        "inline-flex flex-wrap items-center gap-1 rounded-xl border border-neutral-800/80 bg-neutral-900/50 p-1 text-xs",
+        "inline-flex flex-wrap items-center gap-1 rounded-lg border border-white/10 bg-[#141416] p-1 text-xs",
         className,
       )}
       {...props}
@@ -58,10 +58,10 @@ function TabsTrigger({
       type="button"
       onClick={() => ctx?.onValueChange(value)}
       className={cn(
-        "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+        "rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors",
         active
-          ? "bg-neutral-800 text-white"
-          : "text-neutral-400 hover:text-neutral-200",
+          ? "bg-[#242428] text-[#F7F5EF] font-semibold shadow-xs"
+          : "text-[#8C8379] hover:text-[#F7F5EF] hover:bg-white/5",
         className,
       )}
       {...props}

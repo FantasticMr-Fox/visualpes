@@ -11,6 +11,8 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\UserRepository;
 use App\State\UserPasswordHasherProcessor;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -23,15 +25,17 @@ use Symfony\Component\Security\Core\User\UserInterface;
         new GetCollection(),
         new Get(),
         new Post(
-            security: "is_granted('ROLE_ADMIN')",
+            security: "is_granted('ROLE_ADMIN') or is_granted('ROLE_ACCOUNT_ADMIN')",
             validationContext: ['groups' => ['Default', 'user:create']],
             processor: UserPasswordHasherProcessor::class,
         ),
         new Patch(
-            security: "is_granted('ROLE_ADMIN')",
+            security: "is_granted('ROLE_ADMIN') or (is_granted('ROLE_ACCOUNT_ADMIN') and object.getAccount() == user.getAccount())",
             processor: UserPasswordHasherProcessor::class,
         ),
-        new Delete(security: "is_granted('ROLE_ADMIN')"),
+        new Delete(
+            security: "is_granted('ROLE_ADMIN') or (is_granted('ROLE_ACCOUNT_ADMIN') and object.getAccount() == user.getAccount() and object != user)"
+        ),
     ],
     security: "is_granted('ROLE_USER')",
 )]
@@ -100,6 +104,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     #[ApiProperty(readable: false, writable: false)]
     private ?\DateTimeImmutable $resetTokenExpiresAt = null;
+
+    /**
+     * @var Collection<int, Property>
+     */
+    #[ORM\ManyToMany(targetEntity: Property::class, inversedBy: 'assignedUsers')]
+    #[ORM\JoinTable(name: 'user_property')]
+    private Collection $properties;
+
+    public function __construct()
+    {
+        $this->properties = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -280,6 +296,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setResetTokenExpiresAt(?\DateTimeImmutable $resetTokenExpiresAt): static
     {
         $this->resetTokenExpiresAt = $resetTokenExpiresAt;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Property>
+     */
+    public function getProperties(): Collection
+    {
+        return $this->properties;
+    }
+
+    public function addProperty(Property $property): static
+    {
+        if (!$this->properties->contains($property)) {
+            $this->properties->add($property);
+        }
+
+        return $this;
+    }
+
+    public function removeProperty(Property $property): static
+    {
+        $this->properties->removeElement($property);
 
         return $this;
     }

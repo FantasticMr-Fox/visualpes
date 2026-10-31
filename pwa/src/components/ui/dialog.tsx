@@ -32,7 +32,7 @@ const DialogContent = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "flex w-full max-w-md flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-neutral-100 shadow-xl",
+      "flex w-full max-w-md flex-col gap-4 rounded-xl border border-white/10 bg-[#161618] p-6 text-[#F7F5EF] shadow-2xl",
       className,
     )}
     {...props}
@@ -47,7 +47,7 @@ function DialogHeader({
   return (
     <div
       className={cn(
-        "flex items-center justify-between border-b border-neutral-800 pb-3",
+        "flex items-center justify-between border-b border-white/10 pb-3",
         className,
       )}
       {...props}
@@ -61,7 +61,7 @@ function DialogTitle({
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h2
-      className={cn("text-base font-bold text-white", className)}
+      className={cn("text-base font-bold text-[#F7F5EF]  tracking-wide", className)}
       {...props}
     />
   );

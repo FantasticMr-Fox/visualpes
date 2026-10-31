@@ -61,7 +61,9 @@ final readonly class StockManager
                 continue;
             }
 
-            $stockItem->setQuantity($stockItem->getQuantity() - $unitsToConsume);
+            // Ne jamais descendre en dessous de 0
+            $newQuantity = max(0, $stockItem->getQuantity() - $unitsToConsume);
+            $stockItem->setQuantity($newQuantity);
             $this->ensureReplenishmentIfBelowThreshold($stockItem);
         }
 
@@ -93,6 +95,13 @@ final readonly class StockManager
 
     public function ensureReplenishmentIfBelowThreshold(StockItem $stockItem): ?Order
     {
+        // RÈGLE MÉTIER VISUALPES :
+        // Seuls les produits préproduits en atelier (pre_produced) peuvent déclencher une fiche de fabrication interne dans le Kanban !
+        // Les matières premières (raw_material) sont commandées auprès de fournisseurs externes et ne doivent JAMAIS apparaître dans le Kanban atelier.
+        if ('raw_material' === $stockItem->getType()) {
+            return null;
+        }
+
         if ($stockItem->getQuantity() > $stockItem->getAlertThreshold()) {
             return null;
         }

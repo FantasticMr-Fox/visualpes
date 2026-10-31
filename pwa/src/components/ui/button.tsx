@@ -3,26 +3,27 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C9A96B] disabled:pointer-events-none disabled:opacity-40",
   {
     variants: {
       variant: {
-        default: "bg-white text-neutral-950 shadow-sm hover:bg-neutral-200",
+        default:
+          "bg-[#C9A96B] text-[#0E0E0E] font-semibold hover:bg-[#B89354] shadow-xs active:translate-y-px",
+        secondary:
+          "border border-white/10 bg-[#202024] text-[#F7F5EF] hover:bg-[#28282D] hover:text-white",
+        outline:
+          "border border-[#C9A96B]/40 bg-transparent text-[#DFCA9F] hover:bg-[#C9A96B]/10 hover:border-[#C9A96B]",
+        ghost:
+          "text-[#8C8379] hover:bg-white/5 hover:text-[#F7F5EF]",
         destructive:
           "border border-rose-500/30 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25",
-        outline:
-          "border border-neutral-800 bg-neutral-900/80 text-neutral-200 hover:bg-neutral-800 hover:text-white",
-        secondary:
-          "bg-neutral-800 text-neutral-100 hover:bg-neutral-700",
-        ghost:
-          "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100",
-        link: "text-sky-300 underline-offset-4 hover:underline",
+        link: "text-[#C9A96B] underline-offset-4 hover:underline",
       },
       size: {
-        default: "px-3.5 py-2",
-        sm: "rounded-lg px-2.5 py-1.5 text-[11px]",
-        lg: "rounded-xl px-5 py-2.5 text-sm",
-        icon: "h-8 w-8 rounded-lg",
+        default: "px-4 py-2",
+        sm: "px-3 py-1.5 text-[11px]",
+        lg: "px-5 py-2.5 text-sm",
+        icon: "h-9 w-9",
       },
     },
     defaultVariants: {

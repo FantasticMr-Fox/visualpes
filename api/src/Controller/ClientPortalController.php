@@ -7,6 +7,7 @@ use App\Entity\NfcTag;
 use App\Entity\User;
 use App\Repository\AccountRepository;
 use App\Repository\NfcTagRepository;
+use App\Repository\PropertyRepository;
 use App\Repository\UserRepository;
 use App\Repository\ZoneRepository;
 use App\Service\AppMailerService;
@@ -158,6 +159,7 @@ final class ClientPortalController extends AbstractController
         Request $request,
         AccountRepository $accountRepository,
         UserRepository $userRepository,
+        PropertyRepository $propertyRepository,
         UserPasswordHasherInterface $passwordHasher,
         AppMailerService $appMailer,
         EntityManagerInterface $entityManager,
@@ -165,6 +167,10 @@ final class ClientPortalController extends AbstractController
         $user = $this->getUser();
         if (!$user instanceof User) {
             return $this->json(['error' => 'Authentification requise.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!$this->isGranted('ROLE_ADMIN') && !$this->isGranted('ROLE_ACCOUNT_ADMIN')) {
+            return $this->json(['error' => 'Seul un administrateur du compte peut ajouter des collaborateurs.'], Response::HTTP_FORBIDDEN);
         }
 
         $account = $this->resolveTargetAccount($user, $request, $accountRepository);
@@ -186,24 +192,126 @@ final class ClientPortalController extends AbstractController
             return $this->json(['error' => 'Cette adresse email est déjà utilisée.'], Response::HTTP_CONFLICT);
         }
 
+        $role = \is_array($payload) && !empty($payload['role']) ? (string) $payload['role'] : 'ROLE_USER';
+        if (!\in_array($role, ['ROLE_USER', 'ROLE_PROPERTY_ADMIN', 'ROLE_ACCOUNT_ADMIN'], true)) {
+            $role = 'ROLE_USER';
+        }
+
         $member = new User();
         $member->setEmail($email);
-        $member->setRoles(['ROLE_USER']);
+        $member->setRoles([$role]);
         $member->setAccount($account);
         $member->setPassword($passwordHasher->hashPassword($member, $plainPassword));
+
+        // Affectation des propriétés (uniquement celles appartenant au compte)
+        if (isset($payload['properties']) && \is_array($payload['properties'])) {
+            foreach ($payload['properties'] as $propIriOrId) {
+                $propId = is_numeric($propIriOrId) ? (int) $propIriOrId : (int) basename((string) $propIriOrId);
+                $prop = $propertyRepository->find($propId);
+                if (null !== $prop && $prop->getAccount()?->getId() === $account->getId()) {
+                    $member->addProperty($prop);
+                }
+            }
+        }
 
         $entityManager->persist($member);
         $entityManager->flush();
 
-        $appMailer->sendTeamInvite($member, $plainPassword);
+        try {
+            $appMailer->sendTeamInvite($member, $plainPassword);
+        } catch (\Throwable) {
+            // Tolérance si mailer local
+        }
+
+        $propIris = [];
+        foreach ($member->getProperties() as $p) {
+            $propIris[] = '/api/properties/' . $p->getId();
+        }
 
         return $this->json([
             'id' => $member->getId(),
-            '@id' => '/api/users/'.$member->getId(),
+            '@id' => '/api/users/' . $member->getId(),
             'email' => $member->getEmail(),
             'roles' => $member->getRoles(),
-            'account' => '/api/accounts/'.$account->getId(),
+            'account' => '/api/accounts/' . $account->getId(),
+            'properties' => $propIris,
         ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/team/{id}', name: 'api_client_team_update', methods: ['PATCH', 'PUT'], requirements: ['id' => '\d+'])]
+    public function updateTeamMember(
+        int $id,
+        Request $request,
+        AccountRepository $accountRepository,
+        UserRepository $userRepository,
+        PropertyRepository $propertyRepository,
+        UserPasswordHasherInterface $passwordHasher,
+        EntityManagerInterface $entityManager,
+    ): JsonResponse {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Authentification requise.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!$this->isGranted('ROLE_ADMIN') && !$this->isGranted('ROLE_ACCOUNT_ADMIN')) {
+            return $this->json(['error' => 'Seul un administrateur du compte peut modifier les accès des collaborateurs.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $account = $this->resolveTargetAccount($user, $request, $accountRepository);
+        $member = $userRepository->find($id);
+        if (null === $account || null === $member || $member->getAccount()?->getId() !== $account->getId()) {
+            return $this->json(['error' => 'Collaborateur introuvable sur votre compte.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $payload = json_decode($request->getContent() ?: '{}', true);
+        if (!\is_array($payload)) {
+            return $this->json(['error' => 'Payload invalide.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!empty($payload['plainPassword'])) {
+            $plainPassword = (string) $payload['plainPassword'];
+            if (\strlen($plainPassword) < 8) {
+                return $this->json(['error' => 'Le mot de passe doit contenir au moins 8 caractères.'], Response::HTTP_BAD_REQUEST);
+            }
+            $member->setPassword($passwordHasher->hashPassword($member, $plainPassword));
+        }
+
+        if (!empty($payload['role'])) {
+            $role = (string) $payload['role'];
+            if (\in_array($role, ['ROLE_USER', 'ROLE_PROPERTY_ADMIN', 'ROLE_ACCOUNT_ADMIN'], true)) {
+                $member->setRoles([$role]);
+            }
+        }
+
+        if (array_key_exists('properties', $payload) && \is_array($payload['properties'])) {
+            // Nettoyer et réassigner les propriétés
+            foreach ($member->getProperties() as $existingProp) {
+                $member->removeProperty($existingProp);
+            }
+            foreach ($payload['properties'] as $propIriOrId) {
+                $propId = is_numeric($propIriOrId) ? (int) $propIriOrId : (int) basename((string) $propIriOrId);
+                $prop = $propertyRepository->find($propId);
+                if (null !== $prop && $prop->getAccount()?->getId() === $account->getId()) {
+                    $member->addProperty($prop);
+                }
+            }
+        }
+
+        $entityManager->flush();
+
+        $propIris = [];
+        foreach ($member->getProperties() as $p) {
+            $propIris[] = '/api/properties/' . $p->getId();
+        }
+
+        return $this->json([
+            'id' => $member->getId(),
+            '@id' => '/api/users/' . $member->getId(),
+            'email' => $member->getEmail(),
+            'roles' => $member->getRoles(),
+            'account' => '/api/accounts/' . $account->getId(),
+            'properties' => $propIris,
+        ]);
     }
 
     #[Route('/team/{id}/password', name: 'api_client_team_password', methods: ['PATCH'], requirements: ['id' => '\d+'])]
@@ -218,6 +326,10 @@ final class ClientPortalController extends AbstractController
         $user = $this->getUser();
         if (!$user instanceof User) {
             return $this->json(['error' => 'Authentification requise.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!$this->isGranted('ROLE_ADMIN') && !$this->isGranted('ROLE_ACCOUNT_ADMIN')) {
+            return $this->json(['error' => 'Seul un administrateur du compte peut modifier le mot de passe d\'un collaborateur.'], Response::HTTP_FORBIDDEN);
         }
 
         $account = $this->resolveTargetAccount($user, $request, $accountRepository);
@@ -249,6 +361,10 @@ final class ClientPortalController extends AbstractController
         $user = $this->getUser();
         if (!$user instanceof User) {
             return $this->json(['error' => 'Authentification requise.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!$this->isGranted('ROLE_ADMIN') && !$this->isGranted('ROLE_ACCOUNT_ADMIN')) {
+            return $this->json(['error' => 'Seul un administrateur du compte peut supprimer un collaborateur.'], Response::HTTP_FORBIDDEN);
         }
 
         if ($user->getId() === $id) {

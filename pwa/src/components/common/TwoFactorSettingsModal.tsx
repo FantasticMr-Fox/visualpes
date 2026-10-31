@@ -75,22 +75,38 @@ export function TwoFactorSettingsModal({
 
   useEffect(() => {
     if (!open) return;
-    const timer = window.setTimeout(() => {
-      void loadSecurityProfile();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [open, loadSecurityProfile]);
+    let active = true;
 
-  const handleClose = (nextOpen: boolean) => {
-    if (!nextOpen) {
+    const init = async () => {
       setFeedback(null);
       setError(null);
       setTotpSecret(null);
       setOtpAuthUri(null);
       setTotpCode("");
-    }
-    onOpenChange(nextOpen);
-  };
+
+      const res = await apiFetch(`${API_URL}/auth/me`, {
+        headers: { Accept: "application/json" },
+      });
+      if (res.ok && active) {
+        setMe((await res.json()) as AuthMePayload);
+      }
+      if (isAdmin) {
+        const mailRes = await apiFetch(`${API_URL}/auth/emails`, {
+          headers: { Accept: "application/json" },
+        });
+        if (mailRes.ok && active) {
+          const data = (await mailRes.json()) as { items?: EmailLogItem[] };
+          setEmailLogs(data.items ?? []);
+        }
+      }
+    };
+
+    void init();
+
+    return () => {
+      active = false;
+    };
+  }, [open, isAdmin]);
 
   const enableEmail2FA = async () => {
     setBusy(true);
@@ -191,55 +207,55 @@ export function TwoFactorSettingsModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-emerald-400" />
+            <ShieldCheck className="h-4 w-4 text-[#C9A96B]" />
             <DialogTitle>Sécurité, 2FA &amp; Notifications E-mail</DialogTitle>
           </div>
           <button
             type="button"
-            onClick={() => handleClose(false)}
-            className="text-sm text-neutral-400 hover:text-white"
+            onClick={() => onOpenChange(false)}
+            className="text-sm text-[#8C8379] hover:text-[#F7F5EF] transition-colors"
           >
             ✕
           </button>
         </DialogHeader>
 
         {me && (
-          <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-950/70 p-3.5 text-xs">
+          <div className="flex items-center justify-between rounded-lg border border-[#262624] bg-[#0E0E0E] p-3.5 text-xs">
             <div>
-              <div className="font-mono font-semibold text-white">
+              <div className="font-mono font-semibold text-[#F7F5EF]">
                 {me.email}
               </div>
-              <div className="mt-0.5 text-[11px] text-neutral-400">
+              <div className="mt-0.5 text-[11px] text-[#8C8379]">
                 Statut 2FA :{" "}
                 {me.twoFactorEnabled
                   ? `Activée (${me.twoFactorMethod === "totp" ? "Application Authenticator" : "Code par E-mail"})`
                   : "Désactivée"}
               </div>
             </div>
-            <Badge variant={me.twoFactorEnabled ? "success" : "secondary"}>
+            <Badge variant={me.twoFactorEnabled ? "gold" : "secondary"}>
               {me.twoFactorEnabled ? "2FA Active" : "Standard"}
             </Badge>
           </div>
         )}
 
         {feedback && (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
             {feedback}
           </div>
         )}
 
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-xs text-rose-300">
+          <div className="rounded-lg border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-xs text-rose-300">
             {error}
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex flex-col justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-3.5 text-xs">
+          <div className="flex flex-col justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3.5 text-xs">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5 font-semibold text-white">
                 <Mail className="h-3.5 w-3.5 text-sky-400" />
@@ -266,7 +282,7 @@ export function TwoFactorSettingsModal({
             </Button>
           </div>
 
-          <div className="flex flex-col justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-3.5 text-xs">
+          <div className="flex flex-col justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3.5 text-xs">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5 font-semibold text-white">
                 <Smartphone className="h-3.5 w-3.5 text-purple-400" />
@@ -294,7 +310,7 @@ export function TwoFactorSettingsModal({
         {otpAuthUri && totpSecret && (
           <form
             onSubmit={(e) => void confirmTotp(e)}
-            className="flex flex-col items-center gap-3 rounded-2xl border border-purple-500/30 bg-purple-950/15 p-4 text-xs"
+            className="flex flex-col items-center gap-3 rounded-lg border border-purple-500/30 bg-purple-950/15 p-4 text-xs"
           >
             <WifiQrCodeSvg value={otpAuthUri} size={156} />
             <div className="text-center">
@@ -341,14 +357,14 @@ export function TwoFactorSettingsModal({
 
         {/* Journal des e-mails envoyés (Admin uniquement) */}
         {isAdmin && (
-          <div className="flex flex-col gap-2 border-t border-neutral-800 pt-3 text-xs">
+          <div className="flex flex-col gap-2 border-t border-[#262624] pt-3 text-xs">
             <button
               type="button"
               onClick={() => setShowEmailLogs((v) => !v)}
-              className="flex items-center justify-between text-left font-semibold text-neutral-300 hover:text-white"
+              className="flex items-center justify-between text-left font-semibold text-[#8C8379] hover:text-[#F7F5EF] transition-colors"
             >
               <span>Journal des e-mails envoyés ({emailLogs.length})</span>
-              <span className="text-[11px] text-sky-300">
+              <span className="text-[11px] text-[#C9A96B]">
                 {showEmailLogs ? "Masquer" : "Afficher"}
               </span>
             </button>
@@ -356,26 +372,26 @@ export function TwoFactorSettingsModal({
             {showEmailLogs && (
               <div className="flex max-h-52 flex-col gap-2 overflow-y-auto pr-1">
                 {emailLogs.length === 0 ? (
-                  <p className="text-[11px] text-neutral-500">
+                  <p className="text-[11px] text-[#8C8379]">
                     Aucun e-mail envoyé pour le moment.
                   </p>
                 ) : (
                   emailLogs.map((log) => (
                     <div
                       key={log.id}
-                      className="flex flex-col gap-1 rounded-xl border border-neutral-800 bg-neutral-950 p-2.5 text-[11px]"
+                      className="flex flex-col gap-1 rounded-lg border border-[#262624] bg-[#0E0E0E] p-2.5 text-[11px]"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono font-semibold text-emerald-300">
+                        <span className="font-mono font-semibold text-[#DFCA9F]">
                           {log.recipient}
                         </span>
-                        <span className="text-[10px] text-neutral-500">
+                        <span className="text-[10px] text-[#8C8379]">
                           {new Date(log.sentAt).toLocaleString("fr-FR")}
                         </span>
                       </div>
-                      <div className="font-medium text-white">{log.subject}</div>
+                      <div className="font-medium text-[#F7F5EF]">{log.subject}</div>
                       {log.textBody && (
-                        <p className="line-clamp-2 whitespace-pre-line text-neutral-400">
+                        <p className="line-clamp-2 whitespace-pre-line text-[#8C8379]">
                           {log.textBody}
                         </p>
                       )}
@@ -390,4 +406,3 @@ export function TwoFactorSettingsModal({
     </Dialog>
   );
 }
-

@@ -63,6 +63,20 @@ final readonly class CurrentAccountExtension implements QueryCollectionExtension
                 break;
 
             case Property::class:
+                if ($this->security->isGranted('ROLE_ACCOUNT_ADMIN')) {
+                    $queryBuilder->andWhere(\sprintf('%s.account = :%s', $alias, $param));
+                } elseif (!$user->getProperties()->isEmpty()) {
+                    $queryBuilder
+                        ->andWhere(\sprintf('%s.account = :%s', $alias, $param))
+                        ->andWhere(\sprintf('%s IN (:assigned_props)', $alias))
+                        ->setParameter('assigned_props', $user->getProperties());
+                } else {
+                    $queryBuilder->andWhere('1 = 0');
+
+                    return;
+                }
+                break;
+
             case Order::class:
             case SupportTicket::class:
             case User::class:
@@ -71,9 +85,19 @@ final readonly class CurrentAccountExtension implements QueryCollectionExtension
 
             case Zone::class:
                 $join = $queryNameGenerator->generateJoinAlias('property');
-                $queryBuilder
-                    ->join(\sprintf('%s.property', $alias), $join)
-                    ->andWhere(\sprintf('%s.account = :%s', $join, $param));
+                $queryBuilder->join(\sprintf('%s.property', $alias), $join);
+                if ($this->security->isGranted('ROLE_ACCOUNT_ADMIN')) {
+                    $queryBuilder->andWhere(\sprintf('%s.account = :%s', $join, $param));
+                } elseif (!$user->getProperties()->isEmpty()) {
+                    $queryBuilder
+                        ->andWhere(\sprintf('%s.account = :%s', $join, $param))
+                        ->andWhere(\sprintf('%s IN (:assigned_props)', $join))
+                        ->setParameter('assigned_props', $user->getProperties());
+                } else {
+                    $queryBuilder->andWhere('1 = 0');
+
+                    return;
+                }
                 break;
 
             case OrderItem::class:

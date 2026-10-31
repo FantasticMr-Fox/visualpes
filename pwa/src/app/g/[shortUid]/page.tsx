@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/api";
 import { WifiQrCodeSvg } from "@/components/common/WifiQrCodeSvg";
+import { VisuAlpesMark } from "@/components/common/VisuAlpesLogo";
+import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
 
 interface PublicGuidePayload {
   shortUid: string;
@@ -52,7 +54,7 @@ const QUICK_QUESTIONS = [
   "Heure de départ & poubelles ?",
 ];
 
-export default function PublicGuidePage() {
+function PublicGuideContent() {
   const params = useParams<{ shortUid: string }>();
   const shortUid = params?.shortUid ?? "";
 
@@ -201,8 +203,8 @@ export default function PublicGuidePage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-950 p-6 text-neutral-100">
-        <div className="text-center text-xs text-neutral-500">
+      <main className="flex min-h-screen items-center justify-center bg-[#0E0E0E] p-6 text-[#F7F5EF]">
+        <div className="text-center text-xs text-[#8C8379]">
           Chargement du guide d&apos;accueil…
         </div>
       </main>
@@ -211,10 +213,10 @@ export default function PublicGuidePage() {
 
   if (notFoundError || !data) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-950 p-6 text-neutral-100">
-        <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 text-center">
-          <h1 className="text-base font-bold">Support #{shortUid.toUpperCase()}</h1>
-          <p className="mt-1.5 text-xs text-neutral-400">{notFoundError}</p>
+      <main className="flex min-h-screen items-center justify-center bg-[#0E0E0E] p-6 text-[#F7F5EF]">
+        <div className="w-full max-w-sm rounded-2xl border border-[#262624] bg-[#141414]/90 p-6 text-center">
+          <h1 className="text-base font-bold  text-[#F7F5EF]">Support #{shortUid.toUpperCase()}</h1>
+          <p className="mt-1.5 text-xs text-[#8C8379]">{notFoundError}</p>
         </div>
       </main>
     );
@@ -223,28 +225,31 @@ export default function PublicGuidePage() {
   const prop = data.property;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 p-4 text-neutral-100">
-      <div className="flex w-full max-w-md flex-col gap-5 rounded-3xl border border-neutral-800/90 bg-neutral-900/70 p-6 shadow-2xl">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#0E0E0E] p-4 text-[#F7F5EF]">
+      <div className="flex w-full max-w-md flex-col gap-5 rounded-3xl border border-[#262624] bg-[#141414]/90 p-6 shadow-2xl backdrop-blur-md">
         {/* En-tête épuré du logement */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-sky-500 font-mono text-xs font-black text-neutral-950">
-              VA
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#C9A96B]/50 bg-[#191617] p-2">
+              <VisuAlpesMark className="h-full w-full" />
             </div>
             <div>
-              <span className="text-[11px] font-medium text-neutral-400">
+              <span className="text-[11px] font-medium text-[#C9A96B]">
                 {data.accountName ?? "Bienvenue"}
                 {data.zone ? ` • ${data.zone.name}` : ""}
               </span>
-              <h1 className="text-lg font-bold leading-snug text-white">
+              <h1 className="text-lg font-bold leading-snug text-[#F7F5EF] ">
                 {prop?.name ?? "Support VisuAlpes"}
               </h1>
             </div>
           </div>
 
-          <span className="rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-0.5 font-mono text-[11px] text-neutral-400">
-            #{data.shortUid}
-          </span>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher variant="pill" />
+            <span className="rounded-lg border border-white/[0.08] bg-[#111113] px-2 py-0.5 font-mono text-[11px] text-[#C9A96B]">
+              #{data.shortUid}
+            </span>
+          </div>
         </div>
 
         {/* Invitation Magic Scan si ce support n'a pas encore été jumelé */}
@@ -520,5 +525,19 @@ export default function PublicGuidePage() {
         </footer>
       </div>
     </main>
+  );
+}
+
+export default function PublicGuidePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#0E0E0E] p-6 text-xs text-[#8C8379]">
+          Chargement du guide d&apos;accueil…
+        </main>
+      }
+    >
+      <PublicGuideContent />
+    </Suspense>
   );
 }

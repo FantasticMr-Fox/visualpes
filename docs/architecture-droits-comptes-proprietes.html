@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>VisuAlpes — Architecture & Gestion des Droits</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm 10mm 12mm;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0e0e11;
+      color: #E6E3DA;
+      font-size: 8.5pt;
+      line-height: 1.38;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      page-break-after: always;
+      height: 275mm;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .page:last-child {
+      page-break-after: avoid;
+    }
+
+    .page-content {
+      flex: 1;
+    }
+
+    /* HEADER BANNER */
+    .header-banner {
+      border-bottom: 2px solid #C9A96B;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .brand-title {
+      font-size: 19pt;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #FFFFFF;
+    }
+
+    .brand-title span {
+      color: #C9A96B;
+    }
+
+    .brand-subtitle {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: #DFCA9F;
+      margin-top: 2px;
+    }
+
+    .doc-meta {
+      text-align: right;
+      font-size: 7.5pt;
+      color: #8C8379;
+      font-family: monospace;
+      line-height: 1.35;
+    }
+
+    .doc-meta strong {
+      color: #DFCA9F;
+    }
+
+    /* TYPOGRAPHIE & TITRES */
+    h2 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: #FFFFFF;
+      border-left: 3px solid #C9A96B;
+      padding-left: 6px;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    h3 {
+      font-size: 9pt;
+      font-weight: 700;
+      color: #DFCA9F;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+
+    p {
+      margin-bottom: 6px;
+      color: #C8C4B8;
+    }
+
+    strong {
+      color: #FFFFFF;
+    }
+
+    /* CARTOUCHE RÉSUMÉ */
+    .summary-card {
+      background: #161619;
+      border: 1px solid rgba(201, 169, 107, 0.35);
+      border-radius: 6px;
+      padding: 9px 12px;
+      margin-bottom: 10px;
+    }
+
+    .summary-card h3 {
+      margin-top: 0;
+      color: #DFCA9F;
+      font-size: 9.5pt;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .summary-item {
+      background: #111113;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      padding: 6px 8px;
+    }
+
+    .summary-item .title {
+      font-size: 7pt;
+      text-transform: uppercase;
+      color: #8C8379;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+
+    .summary-item .value {
+      font-size: 9pt;
+      color: #FFFFFF;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .summary-item .desc {
+      font-size: 7pt;
+      color: #9C958B;
+      margin-top: 2px;
+      line-height: 1.3;
+    }
+
+    /* TABLEAU DES RÔLES */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 10px 0;
+      font-size: 7.8pt;
+      background: #161619;
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    th {
+      background: #1f1f24;
+      color: #DFCA9F;
+      text-align: left;
+      padding: 6px 8px;
+      font-weight: 700;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 1px solid rgba(201, 169, 107, 0.3);
+    }
+
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: #D6D2C7;
+      vertical-align: top;
+      line-height: 1.32;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    /* BADGES */
+    .badge {
+      display: inline-block;
+      padding: 1.5px 5px;
+      border-radius: 3px;
+      font-size: 6.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      font-family: monospace;
+      white-space: nowrap;
+    }
+
+    .badge-amber {
+      background: rgba(245, 158, 11, 0.15);
+      color: #FCD34D;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .badge-sky {
+      background: rgba(14, 165, 233, 0.15);
+      color: #7DD3FC;
+      border: 1px solid rgba(14, 165, 233, 0.4);
+    }
+
+    .badge-neutral {
+      background: rgba(163, 163, 163, 0.12);
+      color: #E5E5E5;
+      border: 1px solid rgba(163, 163, 163, 0.3);
+    }
+
+    .badge-rose {
+      background: rgba(244, 63, 94, 0.15);
+      color: #FDA4AF;
+      border: 1px solid rgba(244, 63, 94, 0.4);
+    }
+
+    .badge-purple {
+      background: rgba(168, 85, 247, 0.15);
+      color: #D8B4FE;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+
+    .flow-diagram {
+      background: #111113;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      padding: 8px 10px;
+      margin: 6px 0 10px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 7.2pt;
+      line-height: 1.35;
+      color: #DFCA9F;
+      white-space: pre;
+    }
+
+    .code-box {
+      background: #111113;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      padding: 6px 9px;
+      margin: 5px 0 8px 0;
+      font-family: monospace;
+      font-size: 7.2pt;
+      line-height: 1.35;
+      color: #E6E3DA;
+    }
+
+    .section-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .card-block {
+      background: #161619;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 9px 11px;
+    }
+
+    .card-block h4 {
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: #DFCA9F;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    ul {
+      margin-left: 14px;
+      margin-bottom: 5px;
+      color: #C8C4B8;
+      font-size: 7.8pt;
+    }
+
+    li {
+      margin-bottom: 2px;
+    }
+
+    .footer-note {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 6px;
+      font-size: 7pt;
+      color: #7A7268;
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================== -->
+  <!-- PAGE 1 : ARCHITECTURE, RELATIONS & MATRICE DES RÔLES           -->
+  <!-- ============================================================== -->
+  <div class="page">
+    <div class="page-content">
+      <!-- HEADER BANNER -->
+      <div class="header-banner">
+        <div>
+          <div class="brand-title">VISU<span>ALPES</span></div>
+          <div class="brand-subtitle">Spécification d'Architecture — Gestion des Droits Multi-Tenant</div>
+        </div>
+        <div class="doc-meta">
+          <div>Réf : <strong>DOC-PERM-2026-v2</strong></div>
+          <div>Date : <strong>27 Octobre 2026</strong></div>
+          <div>Statut : <strong>Validé &amp; En Production</strong></div>
+          <div>Portée : <strong>ERP VisuAlpes &amp; Portail Client</strong></div>
+        </div>
+      </div>
+
+      <!-- CARTOUCHE SYNTHÈSE -->
+      <div class="summary-card">
+        <h3>Stratégie Directrice : Compte &gt; Propriété(s) &gt; Utilisateur(s)</h3>
+        <p style="font-size: 8pt; margin-bottom: 4px;">
+          L'écosystème phygital VisuAlpes (plaques bois massif gravées, puces NFC, livrets d'accueil et coffres-forts Wi-Fi AES-256) repose sur un partitionnement hiérarchique strict garantissant sécurité, autonomie et non-divulgation des données :
+        </p>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="title">1. Compte Client</div>
+            <div class="value">Account (B2B / B2C)</div>
+            <div class="desc">Entité racine propriétaire (Conciergerie, Syndic ou Particulier). Isole tout le portefeuille.</div>
+          </div>
+          <div class="summary-item">
+            <div class="title">2. Hébergement(s)</div>
+            <div class="value">Property (1..n)</div>
+            <div class="desc">Rattaché à un seul compte. Fiche enrichie, Wi-Fi chiffré, code boîte à clés &amp; zones NFC.</div>
+          </div>
+          <div class="summary-item">
+            <div class="title">3. Collaborateur(s)</div>
+            <div class="value">User (1..n)</div>
+            <div class="desc">Rattaché à une seule conciergerie, mais habilité sur un ou plusieurs hébergements du compte.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCHÉMA RELATIONNEL -->
+      <h2>1. Schéma d'Isolation et Relations</h2>
+      <div class="flow-diagram">┌────────────────────────────────────────────────────────────────────────┐
+│ [COMPTE CLIENT / CONCIERGERIE] (ex: Conciergerie des Sommets B2B)       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ 1..n
+         ┌──────────────────────────┴──────────────────────────┐
+         ▼                                                     ▼
+┌─────────────────────────────────┐   ┌─────────────────────────────────┐
+│ [PROPRIÉTÉ A]                   │   │ [PROPRIÉTÉ B]                   │
+│ - Chalet Le Flocon d'Or         │   │ - Chalet du Renard              │
+│ - Wi-Fi AES-256 & Code Boîte    │   │ - Wi-Fi AES-256 & Code Boîte    │
+│ - Zones & Signalétique NFC      │   │ - Zones & Signalétique NFC      │
+└────────┬──────────────────────┬─┘   └─┬──────────────────────┬────────┘
+         │                      │       │                      │
+         │ (user_property)      └───────┼──────────────┐       │
+         ▼                              ▼              ▼       ▼
+┌─────────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
+│ [UTILISATEUR 1]         │  │ [UTILISATEUR 2]     │  │ [ADMIN DU COMPTE]   │
+│ Simple Utilisateur      │  │ Admin Propriété     │  │ ROLE_ACCOUNT_ADMIN  │
+│ Accès : Propriété A     │  │ Accès : Prop. A + B │  │ Accès : Tout le parc│
+└─────────────────────────┘  └─────────────────────┘  └─────────────────────┘</div>
+
+      <!-- MATRICE DES RÔLES -->
+      <h2>2. Matrice des Rôles &amp; Niveaux d'Habilitation</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%;">Rôle &amp; Identifiant</th>
+            <th style="width: 22%;">Périmètre d'Accès</th>
+            <th style="width: 34%;">Capacités Opérationnelles</th>
+            <th style="width: 22%;">Gestion d'Équipe</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span class="badge badge-amber">ROLE_ACCOUNT_ADMIN</span><br>
+              <strong>Admin du Compte</strong>
+            </td>
+            <td>
+              <strong>Totalité du Compte</strong><br>
+              Accès automatique à tous les chalets actuels et futurs.
+            </td>
+            <td>
+              Gestion complète des chalets, Wi-Fi chiffré, boîtes à clés, commandes atelier, livrets et SAV.
+            </td>
+            <td>
+              <strong>Pouvoir complet :</strong><br>
+              Crée, modifie et supprime les membres et assigne les droits par chalet.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="badge badge-sky">ROLE_PROPERTY_ADMIN</span><br>
+              <strong>Admin Propriété</strong>
+            </td>
+            <td>
+              <strong>Propriétés Assignées</strong><br>
+              Restreint aux chalets cochés via <code>user_property</code>.
+            </td>
+            <td>
+              Gestion autonome des chalets assignés : Wi-Fi, mise à jour code boîte à clés, zones et signalétique.
+            </td>
+            <td>
+              <strong>Aucun droit :</strong><br>
+              Ne peut pas gérer les autres collaborateurs.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="badge badge-neutral">ROLE_USER</span><br>
+              <strong>Simple Utilisateur</strong>
+            </td>
+            <td>
+              <strong>Propriétés Assignées</strong><br>
+              Restreint aux chalets cochés.
+            </td>
+            <td>
+              Consultation opérationnelle (accueil voyageur, ménage, codes d'accès et zones NFC).
+            </td>
+            <td>
+              <strong>Aucun droit :</strong><br>
+              Mode consultation de l'équipe sans bouton d'action.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="badge badge-rose">ROLE_ADMIN</span><br>
+              <strong>Admin Global VisuAlpes</strong>
+            </td>
+            <td>
+              <strong>Plateforme Complète</strong><br>
+              Multi-comptes, atelier et configuration.
+            </td>
+            <td>
+              Super-administrateur : accès à toutes les conciergeries, hébergements, fabrication et déclencheur SAV.
+            </td>
+            <td>
+              Administration de l'ensemble des utilisateurs système.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="badge badge-purple">ROLE_ATELIER</span><br>
+              <strong>Artisan Atelier</strong>
+            </td>
+            <td>
+              <strong>Atelier &amp; Fabrication</strong>
+            </td>
+            <td>
+              Fabrication des plaques bois gravées, encodage des puces NFC NTAG213 et gestion des stocks.
+            </td>
+            <td>
+              Aucune gestion d'utilisateurs clients.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- FOOTER PAGE 1 -->
+    <div class="footer-note">
+      <span>VisuAlpes — Signalétique Connectée Bois &amp; NFC • Spécification d'Architecture Technique</span>
+      <span>Page 1 / 2</span>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- PAGE 2 : SÉCURITÉ BACKEND & INTERFACES ERP / PORTAIL           -->
+  <!-- ============================================================== -->
+  <div class="page">
+    <div class="page-content">
+      <!-- HEADER BANNER CONDENSÉ -->
+      <div class="header-banner">
+        <div>
+          <div class="brand-title" style="font-size: 15pt;">VISU<span>ALPES</span> — Sécurité &amp; Interfaces</div>
+          <div class="brand-subtitle" style="font-size: 8.5pt;">Implémentation Technique &amp; Parcours Utilisateur</div>
+        </div>
+        <div class="doc-meta">
+          <div>Réf : <strong>DOC-PERM-2026-v2</strong></div>
+          <div>Mise à jour : <strong>Octobre 2026</strong></div>
+        </div>
+      </div>
+
+      <!-- SECTION BACKEND -->
+      <h2>3. Implémentation Backend &amp; Sécurité Symfony</h2>
+
+      <h3>3.1. Hiérarchie des Rôles (<code>api/config/packages/security.yaml</code>)</h3>
+      <p>La hiérarchie native de Symfony assure l'héritage descendant des permissions :</p>
+      <div class="code-box">security:
+    role_hierarchy:
+        ROLE_ADMIN:          [ROLE_ACCOUNT_ADMIN, ROLE_ATELIER]
+        ROLE_ACCOUNT_ADMIN:  [ROLE_PROPERTY_ADMIN]
+        ROLE_PROPERTY_ADMIN: [ROLE_USER]</div>
+
+      <h3>3.2. Cloisonnement Automatique Doctrine (<code>CurrentAccountExtension.php</code>)</h3>
+      <p>Chaque requête API Platform (collection ou élément unitaire) est filtrée au niveau SQL/DQL :</p>
+      <ul>
+        <li><strong>Staff VisuAlpes (<code>ROLE_ADMIN</code>)</strong> : Accès sans restriction à l'ensemble des données.</li>
+        <li><strong>Admin du Compte (<code>ROLE_ACCOUNT_ADMIN</code>)</strong> : Clause <code>alias.account = :current_account</code> pour afficher toutes les propriétés du portefeuille.</li>
+        <li><strong>Admin Propriété &amp; Simple Utilisateur</strong> : Clause combinée étanche :
+          <br><code style="color: #DFCA9F;">alias.account = :current_account AND alias IN (:assigned_properties)</code>
+          <br>Si l'utilisateur n'a aucune propriété assignée, la clause de verrouillage <code>1 = 0</code> s'applique immédiatement (zéro fuite de données).
+        </li>
+      </ul>
+
+      <h3>3.3. Contrôleur Équipe &amp; Anti-Élévation de Privilèges (<code>ClientPortalController.php</code>)</h3>
+      <ul>
+        <li><code>POST /api/client/team</code> : Réservé aux <code>ROLE_ACCOUNT_ADMIN</code>. Valide l'unicité de l'email, hache le mot de passe, vérifie l'appartenance des propriétés au compte client et dispatche l'invitation.</li>
+        <li><code>PATCH /api/client/team/{id}</code> : Mise à jour du rôle (Compte, Propriété, Simple Utilisateur), mot de passe et réaffectation des chalets.</li>
+        <li><code>DELETE /api/client/team/{id}</code> : Révocation du compte collaborateur avec blocage de l'auto-suppression.</li>
+        <li><strong>Anti-escalade (<code>UserPasswordHasherProcessor</code>)</strong> : Un admin de compte ne peut pas s'auto-attribuer ni octroyer de rôle staff (<code>ROLE_ADMIN</code> ou <code>ROLE_ATELIER</code>). Le compte de l'utilisateur créé est obligatoirement verrouillé sur celui du créateur.</li>
+      </ul>
+
+      <h3>3.4. Assistance SAV &amp; Régénération de Mot de Passe à Distance (<code>AdminUserController.php</code>)</h3>
+      <p>Accessible par l'Atelier VisuAlpes et par l'Administrateur du Compte :</p>
+      <ul>
+        <li><strong>Pass Temporaire Immédiat</strong> : Génère un mot de passe temporaire robuste (ex : <code>Alpes-2026-Xk8p</code>), l'applique instantanément au compte et l'affiche à l'écran pour dictée téléphonique ou copie presse-papier en 1 clic.</li>
+        <li><strong>Lien Sécurisé 30 min</strong> : Émet un jeton cryptographique horodaté et envoie un code à 6 chiffres par email officiel.</li>
+      </ul>
+
+      <!-- SECTION INTERFACES -->
+      <h2>4. Interfaces Utilisateur Déployées</h2>
+
+      <div class="section-grid">
+        <div class="card-block">
+          <h4>ERP Centralisé VisuAlpes (<code>/va-admin</code>)</h4>
+          <ul>
+            <li><strong>Comptes Clients</strong> : Liste dépliable sans statistiques superflues, affichage B2B/B2C, coordonnées de facturation, notes atelier et compteurs croisés (Propriétés, Commandes, Collaborateurs).</li>
+            <li><strong>Propriétés</strong> : Liste dépliable avec en-tête synthétique rotatif (typologie, station, Wi-Fi, puces NFC) et détails complets (boîte à clés avec copie, coffre-fort Wi-Fi démasquable, zones et signalétique).</li>
+            <li><strong>Gestion des Utilisateurs</strong> : Tableau de bord avec filtre multi-rôles, attribution dynamique des logements selon le compte sélectionné, et déclencheur SAV à distance.</li>
+          </ul>
+        </div>
+
+        <div class="card-block">
+          <h4>Portail Client Conciergerie (<code>/</code>)</h4>
+          <ul>
+            <li><strong>Onglet Équipe &amp; Collaborateurs</strong> :
+              <ul>
+                <li><em>Admin du Compte</em> : Bouton <code>+ Inviter un collaborateur</code>, sélection du rôle (Admin Compte, Admin Propriété, Simple Utilisateur) et cases à cocher des chalets autorisés.</li>
+                <li><em>Autres rôles</em> : Mode consultation protégé avec mention des chalets attribués.</li>
+              </ul>
+            </li>
+            <li><strong>Vue Propriétés</strong> : Les gestionnaires et simples utilisateurs ne visualisent que les hébergements auxquels l'administrateur leur a ouvert l'accès.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER PAGE 2 -->
+    <div class="footer-note">
+      <span>VisuAlpes — Signalétique Connectée Bois &amp; NFC • Spécification d'Architecture Technique</span>
+      <span>Page 2 / 2</span>
+    </div>
+  </div>
+
+</body>
+</html>
+

@@ -1,29 +1,41 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Cormorant_Garamond } from "next/font/google";
+import { I18nProvider } from "@/lib/i18n/I18nContext";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const logoFont = Cormorant_Garamond({
+  variable: "--font-logo",
   subsets: ["latin"],
+  weight: ["500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "VisuAlpes",
-  description: "Plateforme atelier & gestion NFC VisuAlpes",
+  title: "VisuAlpes — Signalétique Haut de Gamme",
+  description: "Plateforme atelier & espace client VisuAlpes",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${logoFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col font-sans bg-[#0E0E0E] text-[#F7F5EF]">
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }
