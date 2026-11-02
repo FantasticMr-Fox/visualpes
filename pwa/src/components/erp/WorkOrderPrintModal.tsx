@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<Order["status"], string> = {
   pending: "1/4 — En attente",
   processing: "2/4 — En fabrication",
   quality_check: "3/4 — Contrôle & Encodage NFC",
+  shipped: "Expédié (Boxtal)",
   completed: "4/4 — Terminé",
 };
 

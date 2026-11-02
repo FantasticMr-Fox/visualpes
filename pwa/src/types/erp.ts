@@ -81,7 +81,7 @@ export interface StockMovement {
 export interface Order {
   "@id": string;
   id: number;
-  status: "pending" | "processing" | "quality_check" | "completed";
+  status: "pending" | "processing" | "quality_check" | "shipped" | "completed";
   createdAt: string;
   stockDeducted?: boolean;
   isStockOrder?: boolean;
@@ -92,6 +92,24 @@ export interface Order {
   trackingNumber?: string | null;
   storeReference?: string | null;
   orderItems?: OrderItem[];
+  externalOrderId?: string | null;
+  paymentMethod?: "stancer" | "fintecture" | "bacs" | string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    company?: string;
+    address1?: string;
+    postcode?: string;
+    city?: string;
+    country?: string;
+  } | null;
+  totalAmount?: string | null;
+  carrier?: string | null;
+  labelUrl?: string | null;
+  pennylaneInvoiceId?: string | null;
+  invoiceUrl?: string | null;
 }
 
 export type UserRole =

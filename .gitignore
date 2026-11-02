@@ -2,3 +2,6 @@
 .DS_Store
 .idea/
 .vscode/
+
+# WordPress local volume
+/shop/

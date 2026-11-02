@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\Post;
 use App\Repository\OrderItemRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 
@@ -41,6 +42,19 @@ class OrderItem
     #[ORM\Column]
     #[Groups(['order:read', 'order:write'])]
     private ?int $quantity = null;
+
+    #[ORM\Column(length: 80, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $sku = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $unitPrice = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['order:read', 'order:write'])]
+    private ?StockItem $stockItem = null;
 
     #[ORM\ManyToOne(inversedBy: 'orderItems')]
     #[ORM\JoinColumn(nullable: false)]
@@ -84,6 +98,42 @@ class OrderItem
     public function setQuantity(int $quantity): static
     {
         $this->quantity = $quantity;
+
+        return $this;
+    }
+
+    public function getSku(): ?string
+    {
+        return $this->sku;
+    }
+
+    public function setSku(?string $sku): static
+    {
+        $this->sku = $sku;
+
+        return $this;
+    }
+
+    public function getUnitPrice(): ?string
+    {
+        return $this->unitPrice;
+    }
+
+    public function setUnitPrice(?string $unitPrice): static
+    {
+        $this->unitPrice = $unitPrice;
+
+        return $this;
+    }
+
+    public function getStockItem(): ?StockItem
+    {
+        return $this->stockItem;
+    }
+
+    public function setStockItem(?StockItem $stockItem): static
+    {
+        $this->stockItem = $stockItem;
 
         return $this;
     }

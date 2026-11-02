@@ -48,6 +48,7 @@ import { StockQrScannerModal } from "@/components/erp/StockQrScannerModal";
 import { NfcEncodingModal } from "@/components/erp/NfcEncodingModal";
 import { AtelierStatsOverview } from "@/components/erp/AtelierStatsOverview";
 import { AtelierDashboardHome } from "@/components/erp/AtelierDashboardHome";
+import { Truck, FileText, CheckCircle2 } from "lucide-react";
 
 const COLUMNS = [
   { id: "pending", title: "En attente", color: "border-amber-500/40 bg-amber-500/5 text-amber-400" },
@@ -458,6 +459,23 @@ export default function VaAdminPage() {
       if (err instanceof UnauthorizedError) return handleUnauthorized();
       console.error("Erreur commande fournisseur :", err);
     }
+  };
+
+  // Expédier via Boxtal et imprimer le bon de livraison + étiquette
+  const handleShipAndPrint = async (order: Order) => {
+    try {
+      const res = await apiFetch(`${API_ORIGIN}/api/orders/${order.id}/ship`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ carrier: order.carrier || "colissimo" }),
+      });
+      if (res.ok) {
+        await refreshAllData();
+      }
+    } catch (err) {
+      console.warn("Échec requête ship backend, ouverture impression :", err);
+    }
+    window.open(`/kanban/print/${order.id}`, "_blank");
   };
 
   // Réceptionner la livraison d'une commande fournisseur
@@ -1617,7 +1635,7 @@ export default function VaAdminPage() {
                                         : accountObj?.name ?? "Client"}
                                     </span>
                                   </div>
-                                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#8C8379]">
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#8C8379]">
                                     <span>
                                       {new Date(order.createdAt).toLocaleDateString("fr-FR")}
                                     </span>
@@ -1625,6 +1643,44 @@ export default function VaAdminPage() {
                                     <span>
                                       {totalSupports} {isStock ? "pcs" : `support${totalSupports > 1 ? "s" : ""}`}
                                     </span>
+                                    {order.paymentMethod && (
+                                      <>
+                                        <span>•</span>
+                                        <span
+                                          className={`rounded px-1.5 py-0.2 font-mono text-[9px] font-bold uppercase tracking-wider ${
+                                            order.paymentMethod === "stancer"
+                                              ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                                              : order.paymentMethod === "fintecture"
+                                              ? "bg-teal-500/15 text-teal-300 border border-teal-500/30"
+                                              : "bg-blue-500/15 text-blue-300 border border-blue-500/30"
+                                          }`}
+                                        >
+                                          {order.paymentMethod}
+                                        </span>
+                                      </>
+                                    )}
+                                    {order.shippingAddress?.city && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-neutral-300">
+                                          📍 {order.shippingAddress.city}
+                                        </span>
+                                      </>
+                                    )}
+                                    {order.invoiceUrl && (
+                                      <>
+                                        <span>•</span>
+                                        <a
+                                          href={order.invoiceUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-[10px] text-[#DFB277] hover:underline"
+                                          title="Facture certifiée Factur-X Pennylane"
+                                        >
+                                          Factur-X ↗
+                                        </a>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
 
@@ -1732,38 +1788,52 @@ export default function VaAdminPage() {
                                 </div>
                               )}
 
-                              {/* Ligne 3 : Avancement d'étape */}
-                              <div className="flex gap-1.5 pt-0.5">
-                                {col.id !== "pending" && (
+                              {/* Ligne 3 : Expédition Boxtal & Avancement d'étape */}
+                              <div className="flex flex-col gap-1.5 pt-0.5">
+                                {!isStock && (
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      const prevStatus =
-                                        COLUMNS[COLUMNS.findIndex((c) => c.id === col.id) - 1].id;
-                                      void updateStatus(order["@id"], prevStatus);
-                                    }}
-                                    className="rounded-lg border border-neutral-800 bg-[#151517] px-2.5 py-1 text-[11px] text-[#8C8379] transition-colors hover:bg-[#242426] hover:text-[#F7F5EF]"
+                                    onClick={() => void handleShipAndPrint(order)}
+                                    className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors shadow-xs"
+                                    title="Expédier avec Boxtal et imprimer le bon de livraison et l'étiquette transporteur"
                                   >
-                                    ←
+                                    <Truck className="w-3.5 h-3.5" />
+                                    <span>Expédier (Boxtal) & Imprimer BL</span>
                                   </button>
                                 )}
-                                {col.id !== "completed" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const nextStatus =
-                                        COLUMNS[COLUMNS.findIndex((c) => c.id === col.id) + 1].id;
-                                      void updateStatus(order["@id"], nextStatus);
-                                    }}
-                                    className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition-colors ${
-                                      isStock
-                                        ? "bg-[#C9A96B] text-[#0E0E0E] hover:bg-[#DFCA9F]"
-                                        : "bg-[#242426] text-[#F7F5EF] hover:bg-[#2C2C30] border border-white/10"
-                                    }`}
-                                  >
-                                    Avancer →
-                                  </button>
-                                )}
+
+                                <div className="flex gap-1.5">
+                                  {col.id !== "pending" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const prevStatus =
+                                          COLUMNS[COLUMNS.findIndex((c) => c.id === col.id) - 1].id;
+                                        void updateStatus(order["@id"], prevStatus);
+                                      }}
+                                      className="rounded-lg border border-neutral-800 bg-[#151517] px-2.5 py-1 text-[11px] text-[#8C8379] transition-colors hover:bg-[#242426] hover:text-[#F7F5EF]"
+                                    >
+                                      ←
+                                    </button>
+                                  )}
+                                  {col.id !== "completed" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextStatus =
+                                          COLUMNS[COLUMNS.findIndex((c) => c.id === col.id) + 1].id;
+                                        void updateStatus(order["@id"], nextStatus);
+                                      }}
+                                      className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition-colors ${
+                                        isStock
+                                          ? "bg-[#C9A96B] text-[#0E0E0E] hover:bg-[#DFCA9F]"
+                                          : "bg-[#242426] text-[#F7F5EF] hover:bg-[#2C2C30] border border-white/10"
+                                      }`}
+                                    >
+                                      Avancer →
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );

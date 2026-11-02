@@ -1,0 +1,406 @@
+/*
+Theme Name: VisuAlpes Atelier
+Theme URI: https://visualpes.fr
+Description: Boutique officielle d'artisanat d'art et mobilier connecté de haute montagne VisuAlpes.
+Author: VisuAlpes Atelier
+Author URI: https://visualpes.fr
+Template: storefront
+Version: 1.0.0
+Text Domain: visualpes
+*/
+
+:root {
+  --va-gold: #CDAE7C;
+  --va-gold-hover: #DFBA84;
+  --va-gold-deep: #B89357;
+  --va-bg-dark: #121112;
+  --va-bg-card: #191718;
+  --va-bg-card-hover: #222021;
+  --va-border: rgba(205, 174, 124, 0.22);
+  --va-border-strong: rgba(205, 174, 124, 0.45);
+  --va-text-primary: #F7F5EF;
+  --va-text-muted: #9E9995;
+}
+
+/* Global Dark Luxury Theme */
+body, html {
+  background-color: var(--va-bg-dark) !important;
+  color: var(--va-text-primary) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+#page {
+  background-color: var(--va-bg-dark) !important;
+}
+
+/* Header Styling */
+.site-header {
+  background-color: #161415 !important;
+  border-bottom: 1px solid var(--va-border) !important;
+  padding-top: 1.25rem !important;
+  padding-bottom: 1.25rem !important;
+  margin-bottom: 0 !important;
+}
+
+.site-branding .custom-logo-link img {
+  max-height: 52px !important;
+  width: auto !important;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+}
+
+.site-header h1.site-title,
+.site-header .site-title a {
+  color: var(--va-gold) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+.site-description {
+  color: var(--va-text-muted) !important;
+  font-size: 0.82rem !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+/* Navigation Menu */
+.main-navigation ul.menu > li > a,
+.main-navigation ul.nav-menu > li > a {
+  color: var(--va-text-primary) !important;
+  font-weight: 500 !important;
+  font-size: 0.95rem !important;
+  transition: color 0.2s ease;
+}
+
+.main-navigation ul.menu > li > a:hover,
+.main-navigation ul.nav-menu > li > a:hover {
+  color: var(--va-gold) !important;
+}
+
+.site-header-cart .cart-contents {
+  color: var(--va-gold) !important;
+  background-color: rgba(205, 174, 124, 0.1) !important;
+  border: 1px solid var(--va-border) !important;
+  border-radius: 9999px !important;
+  padding: 0.5rem 1rem !important;
+  transition: all 0.2s ease;
+}
+
+.site-header-cart .cart-contents:hover {
+  background-color: rgba(205, 174, 124, 0.2) !important;
+  border-color: var(--va-gold) !important;
+}
+
+/* Hero Section */
+.va-shop-hero {
+  position: relative;
+  background: linear-gradient(180deg, rgba(18,17,18,0.75) 0%, rgba(18,17,18,0.96) 100%), url('/alpes-bg.jpg') center/cover no-repeat;
+  border-bottom: 1px solid var(--va-border);
+  padding: 4.5rem 1.5rem;
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.va-shop-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(205, 174, 124, 0.12);
+  border: 1px solid var(--va-border);
+  color: var(--va-gold);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.35rem 1rem;
+  border-radius: 9999px;
+  margin-bottom: 1.25rem;
+}
+
+.va-shop-hero h1 {
+  font-size: 2.75rem !important;
+  font-weight: 700 !important;
+  color: var(--va-text-primary) !important;
+  letter-spacing: -0.02em !important;
+  margin-bottom: 1rem !important;
+  line-height: 1.2 !important;
+}
+
+.va-shop-hero h1 span.gold {
+  color: var(--va-gold);
+}
+
+.va-shop-hero p.subtitle {
+  font-size: 1.15rem;
+  color: var(--va-text-muted);
+  max-width: 660px;
+  margin: 0 auto 2rem auto;
+  line-height: 1.6;
+}
+
+.va-shop-trust {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--va-text-muted);
+}
+
+.va-shop-trust-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255,255,255,0.03);
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.va-shop-trust-item span.icon {
+  color: var(--va-gold);
+}
+
+/* Page Headers & Titles */
+.woocommerce-products-header__title.page-title {
+  color: var(--va-gold) !important;
+  font-size: 1.85rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+  border-bottom: 1px solid var(--va-border);
+  padding-bottom: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+/* Product Cards */
+ul.products li.product {
+  background: var(--va-bg-card) !important;
+  border: 1px solid var(--va-border) !important;
+  border-radius: 14px !important;
+  padding: 1.25rem !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden !important;
+}
+
+ul.products li.product:hover {
+  transform: translateY(-4px);
+  border-color: var(--va-gold) !important;
+  box-shadow: 0 12px 32px rgba(205, 174, 124, 0.18) !important;
+  background: var(--va-bg-card-hover) !important;
+}
+
+ul.products li.product img {
+  border-radius: 10px !important;
+  margin-bottom: 1rem !important;
+  transition: transform 0.4s ease;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  width: 100% !important;
+}
+
+ul.products li.product:hover img {
+  transform: scale(1.02);
+}
+
+ul.products li.product .woocommerce-loop-product__title {
+  color: var(--va-text-primary) !important;
+  font-size: 1.15rem !important;
+  font-weight: 600 !important;
+  padding: 0 !important;
+  margin-bottom: 0.5rem !important;
+}
+
+ul.products li.product .price {
+  color: var(--va-gold) !important;
+  font-size: 1.3rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 1rem !important;
+}
+
+ul.products li.product .price ins {
+  text-decoration: none;
+}
+
+/* Buttons */
+.button,
+button.button,
+input.button,
+#respond input#submit,
+.woocommerce-Button,
+.wc-block-components-button,
+a.button {
+  background: linear-gradient(135deg, var(--va-gold) 0%, var(--va-gold-deep) 100%) !important;
+  color: #191617 !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+  letter-spacing: 0.02em !important;
+  border: none !important;
+  border-radius: 9999px !important;
+  padding: 0.75rem 1.5rem !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 2px 10px rgba(205, 174, 124, 0.25) !important;
+  text-transform: none !important;
+  display: inline-block;
+  text-align: center;
+}
+
+.button:hover,
+button.button:hover,
+input.button:hover,
+#respond input#submit:hover,
+.woocommerce-Button:hover,
+a.button:hover {
+  background: linear-gradient(135deg, var(--va-gold-hover) 0%, var(--va-gold) 100%) !important;
+  color: #121112 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(205, 174, 124, 0.4) !important;
+}
+
+/* Secondary Button / Outline */
+.button.alt,
+button.button.alt,
+input.button.alt {
+  background: linear-gradient(135deg, var(--va-gold) 0%, var(--va-gold-deep) 100%) !important;
+  color: #191617 !important;
+}
+
+/* Single Product Details */
+.single-product div.product .summary .price {
+  color: var(--va-gold) !important;
+  font-size: 1.75rem !important;
+  font-weight: 700 !important;
+}
+
+.single-product div.product .summary .product_title {
+  color: var(--va-text-primary) !important;
+  font-size: 2.25rem !important;
+  font-weight: 700 !important;
+}
+
+.woocommerce-tabs ul.tabs {
+  background-color: transparent !important;
+  border-bottom: 1px solid var(--va-border) !important;
+}
+
+.woocommerce-tabs ul.tabs li {
+  background-color: var(--va-bg-card) !important;
+  border: 1px solid var(--va-border) !important;
+  border-bottom: none !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.woocommerce-tabs ul.tabs li.active {
+  background-color: var(--va-bg-dark) !important;
+  border-color: var(--va-gold) !important;
+}
+
+.woocommerce-tabs ul.tabs li a {
+  color: var(--va-text-primary) !important;
+}
+
+.woocommerce-tabs ul.tabs li.active a {
+  color: var(--va-gold) !important;
+}
+
+.woocommerce-tabs .panel {
+  background: var(--va-bg-card) !important;
+  border: 1px solid var(--va-border) !important;
+  border-radius: 0 0 12px 12px !important;
+  padding: 1.5rem !important;
+  color: var(--va-text-muted) !important;
+}
+
+/* Cart & Checkout */
+table.shop_table {
+  background: var(--va-bg-card) !important;
+  border: 1px solid var(--va-border) !important;
+  border-radius: 12px !important;
+  color: var(--va-text-primary) !important;
+}
+
+table.shop_table th {
+  color: var(--va-gold) !important;
+  border-bottom: 1px solid var(--va-border) !important;
+  font-weight: 600 !important;
+}
+
+table.shop_table td {
+  border-top: 1px solid var(--va-border) !important;
+  color: var(--va-text-primary) !important;
+}
+
+.cart_totals, .woocommerce-checkout-review-order {
+  background: var(--va-bg-card) !important;
+  border: 1px solid var(--va-border) !important;
+  border-radius: 12px !important;
+  padding: 1.5rem !important;
+}
+
+/* Forms & Inputs */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="password"],
+textarea,
+select {
+  background-color: #1F1D1E !important;
+  border: 1px solid var(--va-border) !important;
+  color: var(--va-text-primary) !important;
+  border-radius: 8px !important;
+  padding: 0.65rem 1rem !important;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="tel"]:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--va-gold) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(205, 174, 124, 0.25) !important;
+}
+
+/* Notices / Alerts */
+.woocommerce-message {
+  background-color: rgba(205, 174, 124, 0.12) !important;
+  border-top-color: var(--va-gold) !important;
+  color: var(--va-text-primary) !important;
+  border-radius: 8px !important;
+}
+
+.woocommerce-info {
+  background-color: rgba(60, 130, 246, 0.12) !important;
+  border-top-color: #3b82f6 !important;
+  color: var(--va-text-primary) !important;
+  border-radius: 8px !important;
+}
+
+/* Breadcrumbs */
+.woocommerce-breadcrumb {
+  color: var(--va-text-muted) !important;
+  margin-bottom: 2rem !important;
+}
+
+.woocommerce-breadcrumb a {
+  color: var(--va-gold) !important;
+}
+
+/* Footer */
+.site-footer {
+  background-color: #0E0D0E !important;
+  border-top: 1px solid var(--va-border) !important;
+  color: var(--va-text-muted) !important;
+  padding: 3rem 0 2rem 0 !important;
+}
+
+.site-footer a {
+  color: var(--va-gold) !important;
+}
+
+.site-footer a:hover {
+  color: var(--va-gold-hover) !important;
+}
+

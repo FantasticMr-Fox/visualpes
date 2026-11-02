@@ -41,7 +41,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 class Order
 {
-    public const STATUSES = ['pending', 'processing', 'quality_check', 'completed'];
+    public const STATUSES = ['pending', 'processing', 'quality_check', 'shipped', 'completed'];
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -93,6 +93,47 @@ class Order
     #[ORM\Column(length: 100, nullable: true)]
     #[Groups(['order:read', 'order:write'])]
     private ?string $storeReference = null;
+
+    // --- Champs E-commerce FR & Logistique ---
+    #[ORM\Column(length: 100, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $externalOrderId = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $paymentMethod = null;
+
+    #[ORM\Column(length: 180, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $customerEmail = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $customerPhone = null;
+
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?array $shippingAddress = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $totalAmount = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $carrier = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $labelUrl = null;
+
+    #[ORM\Column(length: 100, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $pennylaneInvoiceId = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?string $invoiceUrl = null;
 
     /**
      * @var Collection<int, OrderItem>
@@ -228,6 +269,126 @@ class Order
     public function setStoreReference(?string $storeReference): static
     {
         $this->storeReference = $storeReference;
+
+        return $this;
+    }
+
+    public function getExternalOrderId(): ?string
+    {
+        return $this->externalOrderId;
+    }
+
+    public function setExternalOrderId(?string $externalOrderId): static
+    {
+        $this->externalOrderId = $externalOrderId;
+
+        return $this;
+    }
+
+    public function getPaymentMethod(): ?string
+    {
+        return $this->paymentMethod;
+    }
+
+    public function setPaymentMethod(?string $paymentMethod): static
+    {
+        $this->paymentMethod = $paymentMethod;
+
+        return $this;
+    }
+
+    public function getCustomerEmail(): ?string
+    {
+        return $this->customerEmail;
+    }
+
+    public function setCustomerEmail(?string $customerEmail): static
+    {
+        $this->customerEmail = $customerEmail;
+
+        return $this;
+    }
+
+    public function getCustomerPhone(): ?string
+    {
+        return $this->customerPhone;
+    }
+
+    public function setCustomerPhone(?string $customerPhone): static
+    {
+        $this->customerPhone = $customerPhone;
+
+        return $this;
+    }
+
+    public function getShippingAddress(): ?array
+    {
+        return $this->shippingAddress;
+    }
+
+    public function setShippingAddress(?array $shippingAddress): static
+    {
+        $this->shippingAddress = $shippingAddress;
+
+        return $this;
+    }
+
+    public function getTotalAmount(): ?string
+    {
+        return $this->totalAmount;
+    }
+
+    public function setTotalAmount(?string $totalAmount): static
+    {
+        $this->totalAmount = $totalAmount;
+
+        return $this;
+    }
+
+    public function getCarrier(): ?string
+    {
+        return $this->carrier;
+    }
+
+    public function setCarrier(?string $carrier): static
+    {
+        $this->carrier = $carrier;
+
+        return $this;
+    }
+
+    public function getLabelUrl(): ?string
+    {
+        return $this->labelUrl;
+    }
+
+    public function setLabelUrl(?string $labelUrl): static
+    {
+        $this->labelUrl = $labelUrl;
+
+        return $this;
+    }
+
+    public function getPennylaneInvoiceId(): ?string
+    {
+        return $this->pennylaneInvoiceId;
+    }
+
+    public function setPennylaneInvoiceId(?string $pennylaneInvoiceId): static
+    {
+        $this->pennylaneInvoiceId = $pennylaneInvoiceId;
+
+        return $this;
+    }
+
+    public function getInvoiceUrl(): ?string
+    {
+        return $this->invoiceUrl;
+    }
+
+    public function setInvoiceUrl(?string $invoiceUrl): static
+    {
+        $this->invoiceUrl = $invoiceUrl;
 
         return $this;
     }

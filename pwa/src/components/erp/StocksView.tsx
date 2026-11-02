@@ -124,6 +124,7 @@ const STATUS_LABELS: Record<Order["status"], string> = {
   pending: "En attente",
   processing: "En fabrication",
   quality_check: "Contrôle & Encodage",
+  shipped: "Expédié (Boxtal)",
   completed: "Terminé",
 };
 

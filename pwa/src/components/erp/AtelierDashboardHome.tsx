@@ -34,6 +34,12 @@ const ORDER_STAGE_COLORS: Record<Order["status"], { label: string; barColor: str
     textColor: "text-purple-400",
     badgeBg: "bg-purple-500/10 border-purple-500/30 text-purple-300",
   },
+  shipped: {
+    label: "Expédié",
+    barColor: "bg-indigo-500",
+    textColor: "text-indigo-400",
+    badgeBg: "bg-indigo-500/10 border-indigo-500/30 text-indigo-300",
+  },
   completed: {
     label: "Terminé",
     barColor: "bg-emerald-500",
